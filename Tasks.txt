@@ -1,0 +1,9 @@
+Qu'est ce qu'on va faire pour la semaine prochaine ? 
+
+Faire de la distance d'édition avec les graphes dynamiques (Adam)
+
+Prédire si une phase de jeu aboutit a l'essai (Jason)
+
+En input la map des joueurs et faire de la generation de graphes, deux noeuds sont relies par des actions.
+
+Prendre la velocité (!!!)

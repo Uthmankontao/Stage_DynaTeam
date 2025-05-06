@@ -143,25 +143,8 @@ def update(t):
     return list(scatters.values()) + [ball_scatter] + passes_lines + pressure_lines + text_labels
 
 # Lancer l’animation
-ani = FuncAnimation(fig, update, frames=times, init_func=init, interval=40, blit=True)
-ani.save("animation_rugby.gif", writer="pillow", fps=15)
-print("Animation avec filtre de pression cohérent enregistrée.")
+#ani = FuncAnimation(fig, update, frames=times, init_func=init, interval=40, blit=True)
+#ani.save("animation_rugby.gif", writer="pillow", fps=15)
+#print("Animation avec filtre de pression cohérent enregistrée.")
 
-"""t = df['Time'].unique()[600]
 
-G = construire_graphe(t)
-
-if G is not None:
-    print("Nœuds :", G.nodes(data=True))
-    print("Arêtes :", G.edges(data=True))
-else:
-    print("Aucun graphe généré à cet instant.")
-
-pos = {n: (d['x'], d['y']) for n, d in G.nodes(data=True)}
-colors = ['red' if d['team'] == 'Att' else 'blue' for n, d in G.nodes(data=True)]
-edge_colors = ['green' if d['type'] == 'passe' else 'gray' for u, v, d in G.edges(data=True)]
-
-plt.figure(figsize=(12, 8))
-nx.draw(G, pos, with_labels=True, node_color=colors, edge_color=edge_colors, node_size=500, font_color='white')
-plt.title(f"Graphe dynamique à t = {t}s")
-plt.show()"""

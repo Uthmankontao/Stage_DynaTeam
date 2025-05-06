@@ -3,6 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 from matplotlib.lines import Line2D
+import pitch
 
 # Charge les données
 df = pd.read_csv('C:/Users/Rémi/Documents/stage/stage_Dynateam/Stage_DynaTeam/data/donnees_brute/Etude 4.3. rugby/data/tracking GPS - pedagogie emergente.csv', low_memory=False)
@@ -39,10 +40,12 @@ for player in players:
 times = df_possession_1['Time'].unique()
 
 # Création de la figure.
-fig, ax = plt.subplots(figsize=(10, 7))
+fig, ax = plt.subplots(figsize=(12, 8))
 
-# Ici on peut déssiner un terrain.
-ax.set_xlim(-10, 50)
+# Dessiner le terrain
+pitch.draw_rugby_field(ax)
+
+ax.set_xlim(-15, 50)
 ax.set_ylim(-40, 10)
 ax.set_title('Graphe dynamique des joueurs et des possibilités de passes.')
 

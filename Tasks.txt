@@ -1,9 +1,13 @@
 Qu'est ce qu'on va faire pour la semaine prochaine ? 
 
-Faire de la distance d'édition avec les graphes dynamiques (Adam)
+Faire de la distance d'édition avec les graphes dynamiques (Adam) ** haha ça c'est pour la fin 
 
-Prédire si une phase de jeu aboutit a l'essai (Jason)
+Prédire si une phase de jeu aboutit a l'essai (Jason) * possible prochaine etape
 
-En input la map des joueurs et faire de la generation de graphes, deux noeuds sont relies par des actions.
+En input la map des joueurs et faire de la generation de graphes, deux noeuds sont relies par des actions. (ok)
 
 Prendre la velocité (!!!)
+
+
+
+################################################################################################################

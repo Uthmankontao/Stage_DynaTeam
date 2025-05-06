@@ -136,7 +136,7 @@ def update(t):
                                    color='white', linestyle='--', linewidth=1, alpha=0.7)[0]
                     pressure_lines.append(line)
                     txt = ax.text((dpos[0] + apos[0])/2, (dpos[1] + apos[1])/2,
-                                  f"{dist:.1f}", fontsize=8, color='white')
+                                  f"{dist:.1f}", fontsize=6, color='white')
                     text_labels.append(txt)
 
     ax.set_title(f'Temps : {t:.2f}s – Côté : {cote}')

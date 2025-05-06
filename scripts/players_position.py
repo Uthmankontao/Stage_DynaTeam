@@ -6,7 +6,7 @@ from matplotlib.lines import Line2D
 import pitch
 
 # Charge les données
-df = pd.read_csv('C:/Users/Rémi/Documents/stage/stage_Dynateam/Stage_DynaTeam/data/donnees_brute/Etude 4.3. rugby/data/tracking GPS - pedagogie emergente.csv', low_memory=False)
+df = pd.read_csv('C:/Users/Ousmane Kontao/Desktop/Projet_Data🏀/data_brute/tracking GPS - pedagogie emergente.csv', low_memory=False)
 
 # Filter data for possession = 1 and exclude the ball.
 df_possession_1 = df[(df['Possession'] == 1) & (df['GPS'] != 'Ball')].copy()
@@ -15,7 +15,7 @@ df_possession_1 = df[(df['Possession'] == 1) & (df['GPS'] != 'Ball')].copy()
 df_possession_1_ball = df[(df['Possession'] == 1) & (df['GPS'] == 'Ball')].copy()
 
 # Ajoute une colonne 'Carrier' et l'initialise à False.
-df_possession_1['Carrier'] = False
+df_possession_1['Carrier'] = False  
 
 # La liste des numéros des joueurs, d'abord les attaquants, puis les defenseurs et enfin tout le monde.
 att_players = [1, 2, 3, 4, 5, 6]
@@ -170,3 +170,4 @@ ani = FuncAnimation(
 
 plt.tight_layout()
 plt.show()
+

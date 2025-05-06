@@ -1,46 +1,90 @@
 import pandas as pd
 import networkx as nx
 import matplotlib.pyplot as plt
-#import os 
-edges_file = "../data/racing_emergent/edges_racing_emergent_possession_1.csv"
-vertices_file = "../data/racing_emergent/vertices_racing_emergent_possession_1.csv"
+import numpy as np
 
-def load_possession_graph(edges_path, vertices_path):
-    """Construit un graphe dirigé à partir de fichiers edges et vertices."""
-    edges_df = pd.read_csv(edges_path)
-    vertices_df = pd.read_csv(vertices_path)
+# -----------------------------
+# Fonction principale
+# -----------------------------
+def construire_graphe(t=316.84):
+    # Chargement des données
+    df = pd.read_csv("C:/Users/Ousmane Kontao/Desktop/Projet_Data🏀/data_brute/tracking GPS - pedagogie emergente.csv", low_memory=False)
+    df_seq = pd.read_csv("C:/Users/Ousmane Kontao/Desktop/Projet_Data🏀/data_brute/event sequencage - pedagogie emergente.csv", sep=';')
+    df_infos = pd.read_csv("C:/Users/Ousmane Kontao/Desktop/Projet_Data🏀/data_brute/informations - pedagogie emergente.csv", sep=';')
+
+    df = df.drop(columns="Unnamed: 0", errors="ignore")
+    df = df[df["GPS"] != "Ball"].copy()
+    df["Player"] = df["Player"].fillna(0).astype(int)
+
+    # Identification joueurs
+    att_players = df_infos[df_infos['Team'] == 'Att']['ID'].tolist()
+    def_players = df_infos[df_infos['Team'] == 'Def']['ID'].tolist()
+
+    # Trouver la frame la plus proche de t
+    frame_cible = df.iloc[(df["Time"] - t).abs().argsort()[:1]]['Frame'].values[0]
+    df_frame = df[df["Frame"] == frame_cible].copy()
+
+    # Création du graphe
     G = nx.DiGraph()
 
-    for _, row in vertices_df.iterrows():
-        node = row["Vertex rank"]
-        G.add_node(node,
-                   relative_position=tuple(row["Relative position"]),
-                   absolute_position=row["Absolute position"],
-                   start_time=row["Start time label"],
-                   end_time=row["End time label"],
-                   leaf=row["Leaf"])
+    # Ajout des nœuds
+    for _, row in df_frame.iterrows():
+        pid = int(row["Player"])
+        G.add_node(pid, team=row["Team"], x=row["X"], y=row["Y"])
 
-    for _, row in edges_df.iterrows():
-        origin, destination = eval(row["Origin-Destination"])
-        label = row["Change label"]
-        G.add_edge(origin, destination, label=label)
-        
+    # Identification du porteur de balle à cet instant
+    df_ball = pd.read_csv("data_brute/tracking GPS - pedagogie emergente.csv", low_memory=False)
+    df_ball = df_ball[(df_ball["GPS"] == "Ball") & (df_ball["Frame"] == frame_cible)]
+    carrier_id = None
+    if not df_ball.empty:
+        bx, by = df_ball[["X", "Y"]].values[0]
+        df_att = df_frame[df_frame["Team"] == "Att"].copy()
+        dists = np.linalg.norm(df_att[["X", "Y"]].values - np.array([bx, by]), axis=1)
+        carrier_id = df_att.iloc[dists.argmin()]["Player"]
+
+    # Passe : arêtes orientées entre le porteur et ses coéquipiers derrière lui
+    if carrier_id:
+        x_c, y_c = G.nodes[carrier_id]['x'], G.nodes[carrier_id]['y']
+        for pid in att_players:
+            if pid != carrier_id and pid in G.nodes:
+                x, y = G.nodes[pid]['x'], G.nodes[pid]['y']
+                if x < x_c and np.linalg.norm([x - x_c, y - y_c]) < 15:
+                    G.add_edge(carrier_id, pid, type='passe')
+
+    # Pression : liens non orientés entre défenseur et attaquant s’ils sont en face (< 7m, devant)
+    for d in def_players:
+        if d not in G.nodes:
+            continue
+        xd, yd = G.nodes[d]['x'], G.nodes[d]['y']
+        for a in att_players:
+            if a not in G.nodes:
+                continue
+            xa, ya = G.nodes[a]['x'], G.nodes[a]['y']
+            dist = np.linalg.norm([xa - xd, ya - yd])
+            if dist < 7 and xa < xd:
+                G.add_edge(d, a, type='pression', label=f"{dist:.1f}")
+
+    # Affichage du graphe
+    pos = {n: (G.nodes[n]['x'], G.nodes[n]['y']) for n in G.nodes}
+    color_map = ['red' if G.nodes[n]['team'] == 'Att' else 'blue' for n in G.nodes]
+
+    plt.figure(figsize=(14, 8))
+    nx.draw_networkx_nodes(G, pos, node_color=color_map, node_size=600, edgecolors='k')
+    nx.draw_networkx_labels(G, pos, font_color='white', font_weight='bold')
+
+    # Arêtes passes
+    nx.draw_networkx_edges(G, pos, edgelist=[(u,v) for u,v,d in G.edges(data=True) if d['type']=='passe'],
+                           edge_color='green', arrows=True, arrowstyle='-|>', width=2)
+
+    # Arêtes pression
+    edges_p = [(u,v) for u,v,d in G.edges(data=True) if d['type']=='pression']
+    nx.draw_networkx_edges(G, pos, edgelist=edges_p, style='dashed', edge_color='gray', arrows=False)
+    labels_p = {(u,v): d['label'] for u,v,d in G.edges(data=True) if d['type']=='pression'}
+    nx.draw_networkx_edge_labels(G, pos, edge_labels=labels_p, font_size=9)
+
+    plt.title(f"Graphe dynamique à t = {t:.2f} s")
+    plt.axis('off')
+    plt.tight_layout()
+    plt.show()
+
     return G
-
-
-G = load_possession_graph(edges_file, vertices_file)
-for _ in G:
-    print(G.nodes[_])
-
-
-plt.figure(figsize=(14, 7))
-pos = nx.spring_layout(G, seed=42)
-node_labels = {n: f"{n}/n{G.nodes[n]['absolute_position']}" for n in G.nodes()}
-edge_labels = nx.get_edge_attributes(G, 'label')
-
-nx.draw(G, pos, with_labels=True, labels=node_labels, node_color='lightcoral', node_size=1000, font_size=8)
-nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels, font_size=7)
-plt.title("Graphe de possession Racing (pédagogie émergente)")
-plt.axis('off')
-plt.tight_layout()
-plt.show()

@@ -11,3 +11,8 @@ Prendre la velocité (!!!)
 
 
 ################################################################################################################
+
+logique de: { animation, graphes, graphes_dataset}
+
+
+prendre en compte si la passe a été faite avant contact ou apres contact et si elle a été faite avec le pied ou la main

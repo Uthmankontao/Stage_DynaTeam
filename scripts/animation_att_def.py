@@ -9,9 +9,9 @@ from pitch import draw_rugby_field
 
 
 # Chargement des données
-df = pd.read_csv("C:/Users/Ousmane Kontao/Desktop/Projet_Data🏀/data_brute/tracking GPS - pedagogie emergente.csv", low_memory=False)
-df_seq = pd.read_csv("C:/Users/Ousmane Kontao/Desktop/Projet_Data🏀/data_brute/event sequencage - pedagogie emergente.csv", sep=';')
-df_infos = pd.read_csv("C:/Users/Ousmane Kontao/Desktop/Projet_Data🏀/data_brute/informations - pedagogie emergente.csv", sep=';')
+df = pd.read_csv("C:/Users/Rémi/Documents/stage/stage_Dynateam/Stage_DynaTeam/data/donnees_brute/Etude 4.3. rugby/data/tracking GPS - pedagogie emergente.csv", low_memory=False)
+df_seq = pd.read_csv("C:/Users/Rémi/Documents/stage/stage_Dynateam/Stage_DynaTeam/data/donnees_brute/Etude 4.3. rugby/data/event sequencage - pedagogie emergente.csv", sep=';')
+df_infos = pd.read_csv("C:/Users/Rémi/Documents/stage/stage_Dynateam/Stage_DynaTeam/data/donnees_brute/Etude 4.3. rugby/data/informations - pedagogie emergente.csv", sep=';')
 
 # Identifier les joueurs
 att_players = df_infos[df_infos['Team'] == 'Att']['ID'].tolist()
@@ -23,6 +23,7 @@ player_teams = {p: 'Att' if p in att_players else 'Def' for p in players}
 df_possession_1 = df[(df['Possession'] == 1) & (df['GPS'] != 'Ball')].copy()
 df_possession_1_ball = df[(df['Possession'] == 1) & (df['GPS'] == 'Ball')].copy()
 df_possession_1['Carrier'] = False
+df_seq_1 = df_seq[df_seq['Possession'] == 1]
 
 # Marquer les porteurs de balle
 for _, row in df_possession_1_ball.iterrows():

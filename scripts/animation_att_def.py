@@ -70,13 +70,25 @@ text_labels = []
 passes_lines, pressure_lines = [], []
 
 def init():
+    """
+    Initialise les positions des joueurs et du ballon pour l'animation.
+    Vide les lignes de passes et de pression.
+    """
     for s in scatters.values():
         s.set_offsets(np.empty((0, 2)))
     ball_scatter.set_offsets(np.empty((0, 2)))
     return list(scatters.values()) + [ball_scatter]
 
 def update(t):
-    global passes_lines, pressure_lines, text_labels
+    """
+    Met à jour les positions des joueurs et le ballon pour chaque frame de l'animation.
+    Affiche les passes possibles et la pression défensive.
+    
+    :param t: Temps actuel de l'animation.
+    :return: Liste des objets à mettre à jour dans l'animation.
+    """
+    # Effacer les lignes de passes et de pression existantes
+    global passes_lines, pressure_lines, text_labels # pour accéder aux listes globales
     for line in passes_lines + pressure_lines:
         line.remove()
     for txt in text_labels:
@@ -84,7 +96,6 @@ def update(t):
     passes_lines.clear()
     pressure_lines.clear()
     text_labels.clear()
-
     frame_data = df_possession_1[df_possession_1['Time'] == t]
     ball_data = df_possession_1_ball[df_possession_1_ball['Time'] == t]
     if frame_data.empty:
@@ -93,51 +104,74 @@ def update(t):
     possession_id = int(frame_data['Possession'].iloc[0])
     cote = get_cote_for_possession(possession_id)
 
-    player_pos = {}
-    for p in players:
-        pdata = frame_data[frame_data['Player'] == p]
-        if not pdata.empty:
-            x, y = pdata[['X', 'Y']].values[0]
-            scatters[p].set_offsets([[x, y]])
-            player_pos[p] = (x, y)
+    player_pos = {} # dictionnaire pour stocker les positions des joueurs
+    for p in players: # on parcourt tous les joueurs
+        # On récupère les données du joueur pour le temps t
+        pdata = frame_data[frame_data['Player'] == p] # données du joueur p
+        # On vérifie si le joueur est présent dans les données
+        if not pdata.empty: # si le joueur est présent
+            # On récupère les coordonnées X et Y du joueur
+            x, y = pdata[['X', 'Y']].values[0] # coordonnées du joueur p
+            # On met à jour la position du joueur dans le dictionnaire
+            scatters[p].set_offsets([[x, y]]) # on met à jour la position du scatter plot
+            # On ajoute le joueur au dictionnaire player_pos
+            player_pos[p] = (x, y) # on ajoute le joueur au dictionnaire player_pos
+            # On vérifie si le joueur est porteur de balle
             txt = ax.text(x, y + 0.8, str(p), fontsize=9, ha='center', color='white',
                           bbox=dict(facecolor='black', alpha=0.5, boxstyle='circle'))
             text_labels.append(txt)
-        else:
-            scatters[p].set_offsets(np.empty((0, 2)))
+        else: # si le joueur n'est pas présent, on vide le scatter plot
+            # On vide le scatter plot du joueur p
+            scatters[p].set_offsets(np.empty((0, 2))) # on vide le scatter plot du joueur p
+            # On vide la position du joueur p dans le dictionnaire player_pos
 
     if not ball_data.empty:
         bx, by = ball_data[['X', 'Y']].values[0]
         ball_scatter.set_offsets([[bx, by]])
 
     # Passes en arrière depuis porteur
-    carrier = frame_data[frame_data['Carrier']]
-    if not carrier.empty:
-        cid = carrier['Player'].iloc[0]
-        cpos = player_pos.get(cid)
-        for p, pos in player_pos.items():
-            if p != cid and player_teams[p] == 'Att':
-                dist = np.linalg.norm(np.array(cpos) - np.array(pos))
+    carrier = frame_data[frame_data['Carrier']] # on récupère le porteur de balle
+    # On vérifie si le porteur de balle est présent
+    if not carrier.empty:# si le porteur de balle est présent
+        # On récupère l'identifiant du porteur de balle
+        cid = carrier['Player'].iloc[0] # identifiant du porteur de balle 
+        # On vérifie si le porteur de balle est présent dans les données
+        cpos = player_pos.get(cid) # position du porteur de balle
+        for p, pos in player_pos.items(): # on parcourt tous les joueurs
+            # On vérifie si le joueur est différent du porteur de balle
+            if p != cid and player_teams[p] == 'Att': # si le joueur est un attaquant
+                # On vérifie si le joueur est présent dans les données
+                dist = np.linalg.norm(np.array(cpos) - np.array(pos)) # distance entre le porteur de balle et le joueur
+                # On vérifie si la distance est inférieure au seuil dynamique
                 if dist < dynamic_threshold(cpos[0]) and is_backward_pass(cpos, pos, cote):
-                    line = ax.plot([cpos[0], pos[0]], [cpos[1], pos[1]], color='orange', linewidth=2, alpha=0.8)[0]
-                    passes_lines.append(line)
+                    # On dessine la ligne de passe
+                    # On dessine la ligne de passe entre le porteur de balle et le joueur
+                    line = ax.plot([cpos[0], pos[0]], [cpos[1], pos[1]], color='orange', linewidth=2, alpha=0.8)[0] 
+                    # On ajoute la ligne de passe à la liste des lignes de passes
+                    passes_lines.append(line) 
 
     # Lien de pression valide uniquement si le défenseur est devant
-    for d in def_players:
+    for d in def_players: # on parcourt tous les défenseurs
+        # On vérifie si le défenseur est présent dans les données
         if d not in player_pos:
             continue
+        # On récupère la position du défenseur
+        # On vérifie si le défenseur est présent dans les données
         dpos = np.array(player_pos[d])
         for a in att_players:
-            if a in player_pos:
+            if a in player_pos: # si le joueur est un attaquant
+                # On récupère la position de l'attaquant
                 apos = np.array(player_pos[a])
+                # On vérifie si la distance entre le défenseur et l'attaquant est inférieure au seuil
                 dist = np.linalg.norm(dpos - apos)
                 if dist < 7 and is_pressure_valid(dpos, apos, cote):
+                    # On dessine la ligne de pression entre le défenseur et l'attaquant
                     line = ax.plot([dpos[0], apos[0]], [dpos[1], apos[1]],
                                    color='white', linestyle='--', linewidth=1, alpha=0.7)[0]
                     pressure_lines.append(line)
                     txt = ax.text((dpos[0] + apos[0])/2, (dpos[1] + apos[1])/2,
                                   f"{dist:.1f}", fontsize=6, color='white')
-                    text_labels.append(txt)
+                    text_labels.append(txt) # on ajoute le texte à la liste des textes
 
     ax.set_title(f'Temps : {t:.2f}s – Côté : {cote}')
     return list(scatters.values()) + [ball_scatter] + passes_lines + pressure_lines + text_labels

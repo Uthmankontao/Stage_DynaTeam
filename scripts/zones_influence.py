@@ -3,16 +3,47 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 from matplotlib.lines import Line2D
-from matplotlib.patches import Circle
-from build_graph import construire_graphe
-import networkx as nx
+from matplotlib.patches import Ellipse
 from pitch import draw_rugby_field
 
+# Fonction pour calculer le gradient (vitesse et direction)
+def calculate_gradient(df):
+    # Trier par joueur et temps pour s'assurer du bon calcul des différences
+    df = df.sort_values(['Player', 'Time'])
+    
+    # Grouper par joueur pour éviter les calculs entre différents joueurs
+    result = pd.DataFrame()
+    for player, group in df.groupby('Player'):
+        # Créer des copies des coordonnées décalées d'une ligne
+        group['X_prev'] = group['X'].shift(1)
+        group['Y_prev'] = group['Y'].shift(1)
+        group['Time_prev'] = group['Time'].shift(1)
+        
+        # Calculer les différences (gradient)
+        group['gradient_X'] = group['X'] - group['X_prev']
+        group['gradient_Y'] = group['Y'] - group['Y_prev']
+        group['time_diff'] = group['Time'] - group['Time_prev']
+        
+        # Éviter la division par zéro
+        group['time_diff'] = group['time_diff'].replace(0, 0.02)
+        
+        # Calculer la magnitude du gradient (vitesse en m/s)
+        group['gradient_magnitude'] = np.sqrt(group['gradient_X']**2 + group['gradient_Y']**2) / group['time_diff']
+        
+        # Calculer l'angle du déplacement en radians
+        group['gradient_angle'] = np.arctan2(group['gradient_Y'], group['gradient_X'])
+        
+        # La première ligne de chaque joueur aura des NaN
+        group = group.fillna(0)
+        result = pd.concat([result, group])
+    
+    return result
 
 # Chargement des données
 df = pd.read_csv("C:/Users/Rémi/Documents/stage/stage_Dynateam/Stage_DynaTeam/data/donnees_brute/Etude 4.3. rugby/data/tracking GPS - pedagogie emergente.csv", low_memory=False)
 df_seq = pd.read_csv("C:/Users/Rémi/Documents/stage/stage_Dynateam/Stage_DynaTeam/data/donnees_brute/Etude 4.3. rugby/data/event sequencage - pedagogie emergente.csv", sep=';')
 df_infos = pd.read_csv("C:/Users/Rémi/Documents/stage/stage_Dynateam/Stage_DynaTeam/data/donnees_brute/Etude 4.3. rugby/data/informations - pedagogie emergente.csv", sep=';')
+
 
 # Identifier les joueurs
 att_players = df_infos[df_infos['Team'] == 'Att']['ID'].tolist()
@@ -20,11 +51,14 @@ def_players = df_infos[df_infos['Team'] == 'Def']['ID'].tolist()
 players = att_players + def_players
 player_teams = {p: 'Att' if p in att_players else 'Def' for p in players}
 
-# Filtrer les données pour une seule possession (ex. : 1)
+# Filtrer les données pour une seule possession
 df_possession_1 = df[(df['Possession'] == 1) & (df['GPS'] != 'Ball')].copy()
 df_possession_1_ball = df[(df['Possession'] == 1) & (df['GPS'] == 'Ball')].copy()
 df_possession_1['Carrier'] = False
 df_seq_1 = df_seq[df_seq['Possession'] == 1]
+
+# Calculer les gradients pour tous les joueurs
+df_possession_1 = calculate_gradient(df_possession_1)
 
 # Marquer les porteurs de balle
 for _, row in df_possession_1_ball.iterrows():
@@ -48,36 +82,57 @@ def get_cote_for_possession(possession_id):
         return row["Cote"].iloc[0]
     return "DROITE"
 
-# Fonction pour vérifier si une ligne de passe traverse une zone d'influence
-def line_intersects_circle(line_start, line_end, circle_center, radius):
+# Fonction pour vérifier si une ligne coupe une ellipse
+def line_intersects_ellipse(line_start, line_end, ellipse_center, width, height, angle):
     """
-    Vérifie si une ligne (passe) coupe un cercle (zone d'influence)
+    Vérifie si une ligne (passe) coupe une ellipse (zone d'influence)
     
     :param line_start: Point de départ de la ligne (x1, y1)
     :param line_end: Point d'arrivée de la ligne (x2, y2)
-    :param circle_center: Centre du cercle (x, y)
-    :param radius: Rayon du cercle
-    :return: True si la ligne coupe le cercle, False sinon
+    :param ellipse_center: Centre de l'ellipse (x, y)
+    :param width: Largeur de l'ellipse
+    :param height: Hauteur de l'ellipse
+    :param angle: Angle de rotation de l'ellipse en radians
+    :return: True si la ligne coupe l'ellipse, False sinon
     """
     # Convertir en numpy arrays
     line_start = np.array(line_start)
     line_end = np.array(line_end)
-    circle_center = np.array(circle_center)
+    ellipse_center = np.array(ellipse_center)
+    
+    # Transformer la ligne dans le repère de l'ellipse (sans rotation)
+    cos_angle = np.cos(-angle)
+    sin_angle = np.sin(-angle)
+    
+    # Translation pour centrer l'ellipse à l'origine
+    ls_translated = line_start - ellipse_center
+    le_translated = line_end - ellipse_center
+    
+    # Rotation pour aligner l'ellipse avec les axes
+    ls_rotated = np.array([
+        ls_translated[0] * cos_angle - ls_translated[1] * sin_angle,
+        ls_translated[0] * sin_angle + ls_translated[1] * cos_angle
+    ])
+    le_rotated = np.array([
+        le_translated[0] * cos_angle - le_translated[1] * sin_angle,
+        le_translated[0] * sin_angle + le_translated[1] * cos_angle
+    ])
+    
+    # Mise à l'échelle pour transformer l'ellipse en cercle
+    ls_scaled = np.array([ls_rotated[0] / (width/2), ls_rotated[1] / (height/2)])
+    le_scaled = np.array([le_rotated[0] / (width/2), le_rotated[1] / (height/2)])
     
     # Vecteur de la ligne
-    d = line_end - line_start
+    d = le_scaled - ls_scaled
     line_length = np.linalg.norm(d)
     
     # Direction normalisée
     d_normalized = d / line_length if line_length > 0 else np.array([0, 0])
     
-    # Vecteur du point de départ au centre du cercle
-    f = line_start - circle_center
-    
-    # Coefficients de l'équation quadratique
+    # Coefficients de l'équation quadratique (maintenant pour un cercle unité)
     a = np.dot(d_normalized, d_normalized)
-    b = 2 * np.dot(f, d_normalized)
-    c = np.dot(f, f) - radius**2
+    b = 2 * np.dot(ls_scaled, d_normalized)
+    c = np.dot(ls_scaled, ls_scaled) - 1
     
     discriminant = b**2 - 4 * a * c
     
@@ -108,7 +163,7 @@ scatters = {p: ax.scatter([], [], s=100, color=('red' if p in att_players else '
 ball_scatter = ax.scatter([], [], s=50, color='white', zorder=5)
 text_labels = []
 
-# Ajouter les zones d'influence à la légende
+# Ajouter les éléments à la légende
 legend_elements = [
     Line2D([0], [0], marker='o', color='w', markerfacecolor='red', markersize=10, label='Attaquant'),
     Line2D([0], [0], marker='o', color='w', markerfacecolor='blue', markersize=10, label='Défenseur'),
@@ -116,14 +171,17 @@ legend_elements = [
     Line2D([0], [0], color='orange', lw=2, label='Passes valides'),
     Line2D([0], [0], color='red', lw=2, linestyle='--', label='Passes bloquées'),
     Line2D([0], [0], color='white', lw=1, linestyle='--', label='Pression défensive'),
-    plt.Circle((0, 0), 0.5, color='blue', alpha=0.2, label='Zone d\'influence')
+    Ellipse((0, 0), width=2, height=1, angle=0, color='blue', alpha=0.2, label='Zone d\'influence')
 ]
 ax.legend(handles=legend_elements, loc='upper left')
 
 passes_lines, blocked_passes_lines, secondary_passes_lines, pressure_lines, influence_zones = [], [], [], [], []
 
-# Configuration des zones d'influence des défenseurs
-INFLUENCE_RADIUS = 3.5  # Rayon de la zone d'influence en mètres
+# Configuration de base des zones d'influence
+BASE_INFLUENCE_RADIUS = 1.5  # Rayon de base en mètres
+MAX_SPEED_EFFECT = 2.0       # Effet max de la vitesse sur la taille
+SPEED_SCALING = 0.5          # Facteur de mise à l'échelle pour la vitesse
+OFFSET_SCALING = 0.4         # Facteur de mise à l'échelle pour le décalage du centre
 
 def init():
     """
@@ -143,7 +201,7 @@ def update(t):
     :param t: Temps actuel de l'animation.
     :return: Liste des objets à mettre à jour dans l'animation.
     """
-    # Effacer les lignes de passes et de pression existantes
+    # Effacer les éléments existants
     global passes_lines, blocked_passes_lines, secondary_passes_lines, pressure_lines, influence_zones, text_labels
     for line in passes_lines + blocked_passes_lines + secondary_passes_lines + pressure_lines:
         if line in ax.get_lines() or hasattr(line, 'remove'):
@@ -168,12 +226,20 @@ def update(t):
     cote = get_cote_for_possession(possession_id)
 
     player_pos = {}  # dictionnaire pour stocker les positions des joueurs
+    player_gradients = {}  # dictionnaire pour stocker les gradients des joueurs
+    
     for p in players:
         pdata = frame_data[frame_data['Player'] == p]
         if not pdata.empty:
             x, y = pdata[['X', 'Y']].values[0]
             scatters[p].set_offsets([[x, y]])
             player_pos[p] = (x, y)
+            
+            # Récupérer les informations de gradient
+            grad_magnitude = pdata['gradient_magnitude'].values[0]
+            grad_angle = pdata['gradient_angle'].values[0]
+            player_gradients[p] = (grad_magnitude, grad_angle)
+            
             txt = ax.text(x, y + 0.8, str(p), fontsize=9, ha='center', color='white',
                           bbox=dict(facecolor='black', alpha=0.5, boxstyle='circle'))
             text_labels.append(txt)
@@ -184,16 +250,81 @@ def update(t):
         bx, by = ball_data[['X', 'Y']].values[0]
         ball_scatter.set_offsets([[bx, by]])
     
-    # Créer des zones d'influence pour les défenseurs
+    # Créer des zones d'influence elliptiques pour les défenseurs
     defender_zones = {}
     for d in def_players:
-        if d in player_pos:
+        if d in player_pos and d in player_gradients:
             dpos = player_pos[d]
-            # Créer un cercle représentant la zone d'influence
-            circle = Circle(dpos, INFLUENCE_RADIUS, color='blue', alpha=0.2, fill=True)
-            ax.add_patch(circle)
-            influence_zones.append(circle)
-            defender_zones[d] = (dpos, INFLUENCE_RADIUS)
+            speed, angle = player_gradients[d]
+            
+            # Limiter la vitesse pour éviter des ellipses trop grandes
+            speed = min(speed, 20)  
+            
+            # Calculer les dimensions de l'ellipse en fonction de la vitesse
+            # Plus le joueur est rapide, plus l'ellipse est allongée dans la direction du mouvement
+            width = BASE_INFLUENCE_RADIUS * (1 + SPEED_SCALING * min(speed, MAX_SPEED_EFFECT))
+            height = BASE_INFLUENCE_RADIUS * (1 - 0.3 * min(speed, MAX_SPEED_EFFECT/2))  # Légèrement réduit perpendiculairement
+            
+            # Calculer le décalage du centre de l'ellipse dans la direction du mouvement
+            offset_factor = OFFSET_SCALING * min(speed, MAX_SPEED_EFFECT)  # Le décalage augmente avec la vitesse
+            offset_x = offset_factor * np.cos(angle)
+            offset_y = offset_factor * np.sin(angle)
+            
+            # Calculer le centre décalé de l'ellipse (devant le joueur)
+            ellipse_center = (dpos[0] + offset_x, dpos[1] + offset_y)
+            
+            # Créer l'ellipse avec l'orientation dans la direction du mouvement
+            ellipse = Ellipse(ellipse_center, width=width, height=height, 
+                             angle=np.degrees(angle), color='blue', alpha=0.2, fill=True)
+            ax.add_patch(ellipse)
+            influence_zones.append(ellipse)
+            
+            # Stocker les paramètres de l'ellipse pour l'intersection
+            defender_zones[d] = (ellipse_center, width, height, angle)
+            
+            # Ajouter du texte pour la vitesse
+            if speed > 0.5:  # Ne montrer que si la vitesse est significative
+                txt = ax.text(dpos[0], dpos[1] - 1.2, f"{speed * 3.6:.1f} km/h", 
+                             fontsize=7, ha='center', color='cyan')
+                text_labels.append(txt)
+
+    # Créer des zones d'influence elliptiques pour les attaquants
+    stricker_zones = {}
+    for d in att_players:
+        if d in player_pos and d in player_gradients:
+            dpos = player_pos[d]
+            speed, angle = player_gradients[d]
+            
+            # Limiter la vitesse pour éviter des ellipses trop grandes
+            speed = min(speed, 20)  
+            
+            # Calculer les dimensions de l'ellipse en fonction de la vitesse
+            # Plus le joueur est rapide, plus l'ellipse est allongée dans la direction du mouvement
+            width = BASE_INFLUENCE_RADIUS * (1 + SPEED_SCALING * min(speed, MAX_SPEED_EFFECT))
+            height = BASE_INFLUENCE_RADIUS * (1 - 0.3 * min(speed, MAX_SPEED_EFFECT/2))  # Légèrement réduit perpendiculairement
+            
+            # Calculer le décalage du centre de l'ellipse dans la direction du mouvement
+            offset_factor = OFFSET_SCALING * min(speed, MAX_SPEED_EFFECT)  # Le décalage augmente avec la vitesse
+            offset_x = offset_factor * np.cos(angle)
+            offset_y = offset_factor * np.sin(angle)
+            
+            # Calculer le centre décalé de l'ellipse (devant le joueur)
+            ellipse_center = (dpos[0] + offset_x, dpos[1] + offset_y)
+            
+            # Créer l'ellipse avec l'orientation dans la direction du mouvement
+            ellipse = Ellipse(ellipse_center, width=width, height=height, 
+                             angle=np.degrees(angle), color='red', alpha=0.2, fill=True)
+            ax.add_patch(ellipse)
+            influence_zones.append(ellipse)
+            
+            # Stocker les paramètres de l'ellipse pour l'intersection
+            stricker_zones[d] = (ellipse_center, width, height, angle)
+            
+            # Ajouter du texte pour la vitesse
+            if speed > 0.5:  # Ne montrer que si la vitesse est significative
+                txt = ax.text(dpos[0], dpos[1] - 1.2, f"{speed * 3.6:.1f} km/h", 
+                             fontsize=7, ha='center', color='cyan')
+                text_labels.append(txt)
 
     # Passes depuis porteur et identification des receveurs directs
     direct_receivers = []  # liste pour stocker les receveurs directs potentiels
@@ -210,8 +341,8 @@ def update(t):
                     if dist < dynamic_threshold(cpos[0]) and is_backward_pass(cpos, pos, cote):
                         # Vérifier si la passe traverse une zone d'influence d'un défenseur
                         pass_blocked = False
-                        for _, (def_pos, radius) in defender_zones.items():
-                            if line_intersects_circle(cpos, pos, def_pos, radius):
+                        for _, (def_pos, width, height, angle) in defender_zones.items():
+                            if line_intersects_ellipse(cpos, pos, def_pos, width, height, angle):
                                 pass_blocked = True
                                 break
                         
@@ -247,8 +378,8 @@ def update(t):
                         if dist < dynamic_threshold(receiver_pos[0]) and is_backward_pass(receiver_pos, pos, cote):
                             # Vérifier si la passe secondaire traverse une zone d'influence d'un défenseur
                             pass_blocked = False
-                            for _, (def_pos, radius) in defender_zones.items():
-                                if line_intersects_circle(receiver_pos, pos, def_pos, radius):
+                            for _, (def_pos, width, height, angle) in defender_zones.items():
+                                if line_intersects_ellipse(receiver_pos, pos, def_pos, width, height, angle):
                                     pass_blocked = True
                                     break
                             
@@ -298,5 +429,5 @@ def update(t):
 ani = FuncAnimation(fig, update, frames=times, init_func=init, interval=40, blit=True)
 plt.tight_layout()
 plt.show()
-#ani.save("animation_rugby_avec_zones_influence.gif", writer="pillow", fps=15)
-#print("Animation avec zones d'influence des défenseurs enregistrée.")
+#ani.save("animation_rugby_avec_zones_elliptiques.gif", writer="pillow", fps=15)
+#print("Animation avec zones d'influence elliptiques enregistrée.")

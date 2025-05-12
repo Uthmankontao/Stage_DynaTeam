@@ -4,40 +4,10 @@ import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 from matplotlib.lines import Line2D
 from matplotlib.patches import Ellipse
-from pitch import draw_rugby_field
+from tools.pitch import draw_rugby_field
+from tools.gradient import calculate_gradient
+from tools.fonctions_utiles import *
 
-# Fonction pour calculer le gradient (vitesse et direction)
-def calculate_gradient(df):
-    # Trier par joueur et temps pour s'assurer du bon calcul des différences
-    df = df.sort_values(['Player', 'Time'])
-    
-    # Grouper par joueur pour éviter les calculs entre différents joueurs
-    result = pd.DataFrame()
-    for player, group in df.groupby('Player'):
-        # Créer des copies des coordonnées décalées d'une ligne
-        group['X_prev'] = group['X'].shift(1)
-        group['Y_prev'] = group['Y'].shift(1)
-        group['Time_prev'] = group['Time'].shift(1)
-        
-        # Calculer les différences (gradient)
-        group['gradient_X'] = group['X'] - group['X_prev']
-        group['gradient_Y'] = group['Y'] - group['Y_prev']
-        group['time_diff'] = group['Time'] - group['Time_prev']
-        
-        # Éviter la division par zéro
-        group['time_diff'] = group['time_diff'].replace(0, 0.02)
-        
-        # Calculer la magnitude du gradient (vitesse en m/s)
-        group['gradient_magnitude'] = np.sqrt(group['gradient_X']**2 + group['gradient_Y']**2) / group['time_diff']
-        
-        # Calculer l'angle du déplacement en radians
-        group['gradient_angle'] = np.arctan2(group['gradient_Y'], group['gradient_X'])
-        
-        # La première ligne de chaque joueur aura des NaN
-        group = group.fillna(0)
-        result = pd.concat([result, group])
-    
-    return result
 
 # Chargement des données
 df = pd.read_csv("C:/Users/Ousmane Kontao/Desktop/Projet_Data🏀/data_brute/tracking GPS - pedagogie emergente.csv", low_memory=False)
@@ -66,92 +36,6 @@ for _, row in df_possession_1_ball.iterrows():
         t, p = row['Time'], row['Player']
         df_possession_1.loc[(df_possession_1['Time'] == t) & (df_possession_1['Player'] == p), 'Carrier'] = True
 
-# Fonctions utiles
-def dynamic_threshold(x):
-    return max(8, 18 - 0.2 * x)
-
-def is_backward_pass(cpos, pos, cote):
-    return pos[0] > cpos[0] if cote == "DROITE" else pos[0] < cpos[0]
-
-def is_pressure_valid(dpos, apos, cote):
-    return dpos[0] < apos[0] if cote == "DROITE" else dpos[0] > apos[0]
-
-def get_cote_for_possession(possession_id):
-    row = df_seq[df_seq["Possession"] == possession_id]
-    if not row.empty:
-        return row["Cote"].iloc[0]
-    return "DROITE"
-
-# Fonction pour vérifier si une ligne coupe une ellipse
-def line_intersects_ellipse(line_start, line_end, ellipse_center, width, height, angle):
-    """
-    Vérifie si une ligne (passe) coupe une ellipse (zone d'influence)
-    
-    :param line_start: Point de départ de la ligne (x1, y1)
-    :param line_end: Point d'arrivée de la ligne (x2, y2)
-    :param ellipse_center: Centre de l'ellipse (x, y)
-    :param width: Largeur de l'ellipse
-    :param height: Hauteur de l'ellipse
-    :param angle: Angle de rotation de l'ellipse en radians
-    :return: True si la ligne coupe l'ellipse, False sinon
-    """
-    # Convertir en numpy arrays
-    line_start = np.array(line_start)
-    line_end = np.array(line_end)
-    ellipse_center = np.array(ellipse_center)
-    
-    # Transformer la ligne dans le repère de l'ellipse (sans rotation)
-    cos_angle = np.cos(-angle)
-    sin_angle = np.sin(-angle)
-    
-    # Translation pour centrer l'ellipse à l'origine
-    ls_translated = line_start - ellipse_center
-    le_translated = line_end - ellipse_center
-    
-    # Rotation pour aligner l'ellipse avec les axes
-    ls_rotated = np.array([
-        ls_translated[0] * cos_angle - ls_translated[1] * sin_angle,
-        ls_translated[0] * sin_angle + ls_translated[1] * cos_angle
-    ])
-    le_rotated = np.array([
-        le_translated[0] * cos_angle - le_translated[1] * sin_angle,
-        le_translated[0] * sin_angle + le_translated[1] * cos_angle
-    ])
-    
-    # Mise à l'échelle pour transformer l'ellipse en cercle
-    ls_scaled = np.array([ls_rotated[0] / (width/2), ls_rotated[1] / (height/2)])
-    le_scaled = np.array([le_rotated[0] / (width/2), le_rotated[1] / (height/2)])
-    
-    # Vecteur de la ligne
-    d = le_scaled - ls_scaled
-    line_length = np.linalg.norm(d)
-    
-    # Direction normalisée
-    d_normalized = d / line_length if line_length > 0 else np.array([0, 0])
-    
-    # Coefficients de l'équation quadratique (maintenant pour un cercle unité)
-    a = np.dot(d_normalized, d_normalized)
-    b = 2 * np.dot(ls_scaled, d_normalized)
-    c = np.dot(ls_scaled, ls_scaled) - 1
-    
-    discriminant = b**2 - 4 * a * c
-    
-    # Pas d'intersection
-    if discriminant < 0:
-        return False
-    
-    # Calculer les solutions
-    discriminant = np.sqrt(discriminant)
-    t1 = (-b - discriminant) / (2 * a)
-    t2 = (-b + discriminant) / (2 * a)
-    
-    # Vérifier si l'intersection est sur le segment de ligne
-    if (0 <= t1 <= line_length) or (0 <= t2 <= line_length):
-        return True
-    
-    return False
-
-# Time
 times = df_possession_1['Time'].unique()
 
 # Graphique
@@ -162,18 +46,6 @@ ax.set_ylim(-40, 10)
 scatters = {p: ax.scatter([], [], s=100, color=('red' if p in att_players else 'blue')) for p in players}
 ball_scatter = ax.scatter([], [], s=50, color='white', zorder=5)
 text_labels = []
-
-# Ajouter les éléments à la légende
-legend_elements = [
-    Line2D([0], [0], marker='o', color='w', markerfacecolor='red', markersize=10, label='Attaquant'),
-    Line2D([0], [0], marker='o', color='w', markerfacecolor='blue', markersize=10, label='Défenseur'),
-    Line2D([0], [0], marker='o', color='w', markerfacecolor='white', markersize=8, label='Ballon'),
-    Line2D([0], [0], color='orange', lw=2, label='Passes valides'),
-    Line2D([0], [0], color='red', lw=2, linestyle='--', label='Passes bloquées'),
-    Line2D([0], [0], color='white', lw=1, linestyle='--', label='Pression défensive'),
-    Ellipse((0, 0), width=2, height=1, angle=0, color='blue', alpha=0.2, label='Zone d\'influence')
-]
-ax.legend(handles=legend_elements, loc='upper left')
 
 passes_lines, blocked_passes_lines, secondary_passes_lines, pressure_lines, influence_zones = [], [], [], [], []
 
@@ -223,7 +95,7 @@ def update(t):
         return []
 
     possession_id = int(frame_data['Possession'].iloc[0])
-    cote = get_cote_for_possession(possession_id)
+    cote = get_cote_for_possession(possession_id, df_seq_1)
 
     player_pos = {}  # dictionnaire pour stocker les positions des joueurs
     player_gradients = {}  # dictionnaire pour stocker les gradients des joueurs
@@ -425,9 +297,6 @@ def update(t):
     return (list(scatters.values()) + [ball_scatter] + passes_lines + blocked_passes_lines + 
             secondary_passes_lines + pressure_lines + influence_zones + text_labels)
 
-# Lancer l'animation
 ani = FuncAnimation(fig, update, frames=times, init_func=init, interval=40, blit=True)
 plt.tight_layout()
 plt.show()
-#ani.save("animation_rugby_avec_zones_elliptiques.gif", writer="pillow", fps=15)
-#print("Animation avec zones d'influence elliptiques enregistrée.")

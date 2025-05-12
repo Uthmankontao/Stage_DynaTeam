@@ -5,7 +5,7 @@ from matplotlib.animation import FuncAnimation
 from matplotlib.lines import Line2D
 from build_graph import construire_graphe
 import networkx as nx
-from pitch import draw_rugby_field
+from Stage_DynaTeam.scripts.tools.pitch import draw_rugby_field
 
 
 # Chargement des données

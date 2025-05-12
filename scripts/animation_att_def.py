@@ -9,9 +9,9 @@ from pitch import draw_rugby_field
 
 
 # Chargement des données
-df = pd.read_csv("C:/Users/Ousmane Kontao/Desktop/Projet_Data🏀/data_brute/tracking GPS - pedagogie emergente.csv", low_memory=False)
-df_seq = pd.read_csv("C:/Users/Ousmane Kontao/Desktop/Projet_Data🏀/data_brute/event sequencage - pedagogie emergente.csv", sep=';')
-df_infos = pd.read_csv("C:/Users/Ousmane Kontao/Desktop/Projet_Data🏀/data_brute/informations - pedagogie emergente.csv", sep=';')
+df = pd.read_csv("C:/Users/Rémi/Documents/stage/stage_Dynateam/Stage_DynaTeam/data/donnees_brute/Etude 4.3. rugby/data/tracking GPS - pedagogie emergente.csv", low_memory=False)
+df_seq = pd.read_csv("C:/Users/Rémi/Documents/stage/stage_Dynateam/Stage_DynaTeam/data/donnees_brute/Etude 4.3. rugby/data/event sequencage - pedagogie emergente.csv", sep=';')
+df_infos = pd.read_csv("C:/Users/Rémi/Documents/stage/stage_Dynateam/Stage_DynaTeam/data/donnees_brute/Etude 4.3. rugby/data/informations - pedagogie emergente.csv", sep=';')
 
 # Identifier les joueurs
 att_players = df_infos[df_infos['Team'] == 'Att']['ID'].tolist()
@@ -23,6 +23,7 @@ player_teams = {p: 'Att' if p in att_players else 'Def' for p in players}
 df_possession_1 = df[(df['Possession'] == 1) & (df['GPS'] != 'Ball')].copy()
 df_possession_1_ball = df[(df['Possession'] == 1) & (df['GPS'] == 'Ball')].copy()
 df_possession_1['Carrier'] = False
+df_seq_1 = df_seq[df_seq['Possession'] == 1]
 
 # Marquer les porteurs de balle
 for _, row in df_possession_1_ball.iterrows():
@@ -67,7 +68,7 @@ text_labels = []
 ]"""
 #ax.legend(handles=legend_elements, loc='upper left')
 
-passes_lines, pressure_lines = [], []
+passes_lines, secondary_passes_lines, pressure_lines = [], [], []
 
 def init():
     """
@@ -88,14 +89,17 @@ def update(t):
     :return: Liste des objets à mettre à jour dans l'animation.
     """
     # Effacer les lignes de passes et de pression existantes
-    global passes_lines, pressure_lines, text_labels # pour accéder aux listes globales
-    for line in passes_lines + pressure_lines:
-        line.remove()
+    global passes_lines, secondary_passes_lines, pressure_lines, text_labels
+    for line in passes_lines + secondary_passes_lines + pressure_lines:
+        if line in ax.get_lines():
+            line.remove()
     for txt in text_labels:
         txt.remove()
     passes_lines.clear()
+    secondary_passes_lines.clear()
     pressure_lines.clear()
     text_labels.clear()
+    
     frame_data = df_possession_1[df_possession_1['Time'] == t]
     ball_data = df_possession_1_ball[df_possession_1_ball['Time'] == t]
     if frame_data.empty:
@@ -129,26 +133,49 @@ def update(t):
         bx, by = ball_data[['X', 'Y']].values[0]
         ball_scatter.set_offsets([[bx, by]])
 
-    # Passes en arrière depuis porteur
-    carrier = frame_data[frame_data['Carrier']] # on récupère le porteur de balle
-    # On vérifie si le porteur de balle est présent
-    if not carrier.empty:# si le porteur de balle est présent
-        # On récupère l'identifiant du porteur de balle
-        cid = carrier['Player'].iloc[0] # identifiant du porteur de balle 
-        # On vérifie si le porteur de balle est présent dans les données
-        cpos = player_pos.get(cid) # position du porteur de balle
-        for p, pos in player_pos.items(): # on parcourt tous les joueurs
-            # On vérifie si le joueur est différent du porteur de balle
-            if p != cid and player_teams[p] == 'Att': # si le joueur est un attaquant
-                # On vérifie si le joueur est présent dans les données
-                dist = np.linalg.norm(np.array(cpos) - np.array(pos)) # distance entre le porteur de balle et le joueur
-                # On vérifie si la distance est inférieure au seuil dynamique
-                if dist < dynamic_threshold(cpos[0]) and is_backward_pass(cpos, pos, cote):
-                    # On dessine la ligne de passe
-                    # On dessine la ligne de passe entre le porteur de balle et le joueur
-                    line = ax.plot([cpos[0], pos[0]], [cpos[1], pos[1]], color='orange', linewidth=2, alpha=0.8)[0] 
-                    # On ajoute la ligne de passe à la liste des lignes de passes
-                    passes_lines.append(line) 
+    # Passes depuis porteur et identification des receveurs directs
+    direct_receivers = []  # liste pour stocker les receveurs directs potentiels
+    carrier = frame_data[frame_data['Carrier']]
+    
+    if not carrier.empty:
+        cid = carrier['Player'].iloc[0]
+        cpos = player_pos.get(cid)
+        
+        if cpos:  # vérifier que la position du porteur est disponible
+            for p, pos in player_pos.items():
+                if p != cid and player_teams[p] == 'Att':
+                    dist = np.linalg.norm(np.array(cpos) - np.array(pos))
+                    if dist < dynamic_threshold(cpos[0]) and is_backward_pass(cpos, pos, cote):
+                        # Tracer les passes directes
+                        arrow = ax.annotate("", 
+                                 xy=(pos[0], pos[1]),           # pointe de la flèche
+                                 xytext=(cpos[0], cpos[1]),     # base de la flèche
+                                 arrowprops=dict(arrowstyle="->", color="orange", 
+                                                lw=2, alpha=0.8))
+                        passes_lines.append(arrow)
+                        txt = ax.text((pos[0] + cpos[0])/2, (pos[1] + cpos[1])/2,
+                                  f"{dist:.1f}", fontsize=6, color='white')
+                        text_labels.append(txt)
+                        direct_receivers.append(p)  # Ajouter ce joueur comme receveur direct
+
+            # Tracer les passes secondaires à partir des receveurs directs
+            for receiver in direct_receivers:
+                receiver_pos = player_pos.get(receiver)
+                
+                for p, pos in player_pos.items():
+                    if p != receiver and p != cid and player_teams[p] == 'Att':
+                        dist = np.linalg.norm(np.array(receiver_pos) - np.array(pos))
+                        if dist < dynamic_threshold(receiver_pos[0]) and is_backward_pass(receiver_pos, pos, cote):
+                            # Tracer les passes secondaires
+                            arrow = ax.annotate("", 
+                                     xy=(pos[0], pos[1]),            # pointe de la flèche
+                                     xytext=(receiver_pos[0], receiver_pos[1]),  # base de la flèche
+                                     arrowprops=dict(arrowstyle="->", color="yellow", 
+                                                    lw=1.5, alpha=0.7))
+                            txt = ax.text((pos[0] + receiver_pos[0])/2, (pos[1] + receiver_pos[1])/2,
+                                  f"{dist:.1f}", fontsize=6, color='white')
+                            text_labels.append(txt)
+                            secondary_passes_lines.append(arrow)
 
     # Lien de pression valide uniquement si le défenseur est devant
     for d in def_players: # on parcourt tous les défenseurs
@@ -174,11 +201,15 @@ def update(t):
                     text_labels.append(txt) # on ajoute le texte à la liste des textes
 
     ax.set_title(f'Temps : {t:.2f}s – Côté : {cote}')
-    return list(scatters.values()) + [ball_scatter] + passes_lines + pressure_lines + text_labels
+    return list(scatters.values()) + [ball_scatter] + passes_lines + secondary_passes_lines + pressure_lines + text_labels
 
 # Lancer l’animation
 ani = FuncAnimation(fig, update, frames=times, init_func=init, interval=40, blit=True)
-ani.save("animation_rugby.gif", writer="pillow", fps=15)
-print("Animation avec filtre de pression cohérent enregistrée.")
+
+plt.tight_layout()
+plt.show()
+#ani.save("animation_rugby.gif", writer="pillow", fps=15)
+#print("Animation avec filtre de pression cohérent enregistrée.")
+
 
 

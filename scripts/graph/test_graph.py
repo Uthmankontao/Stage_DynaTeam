@@ -5,8 +5,8 @@ import numpy as np
 
 
 def main():
-    df = pd.read_csv("C:/Users/Ousmane Kontao/Desktop/Projet_Data🏀/data_brute/tracking GPS - pedagogie emergente.csv", low_memory=False)
-    df_infos = pd.read_csv("C:/Users/Ousmane Kontao/Desktop/Projet_Data🏀/data_brute/informations - pedagogie emergente.csv", sep=';')
+    df = pd.read_csv("C:/Users/Ousmane Kontao/Desktop/Projet_Data/data_brute/tracking GPS - pedagogie emergente.csv", low_memory=False)
+    df_infos = pd.read_csv("C:/Users/Ousmane Kontao/Desktop/Projet_Data/data_brute/informations - pedagogie emergente.csv", sep=';')
     sequence = int(input("donne un numéro de la possession : "))
     timestamps = sorted(df[df["Possession"] == sequence]["Time"].unique()[::10])
     graphes = [construire_graphe(t, df, df_infos, sequence) for t in timestamps]
@@ -17,8 +17,8 @@ def main():
 
 
 def main_2():
-    df = pd.read_csv("C:/Users/Ousmane Kontao/Desktop/Projet_Data🏀/data_brute/tracking GPS - pedagogie emergente.csv", low_memory=False)
-    df_infos = pd.read_csv("C:/Users/Ousmane Kontao/Desktop/Projet_Data🏀/data_brute/informations - pedagogie emergente.csv", sep=';')
+    df = pd.read_csv("C:/Users/Ousmane Kontao/Desktop/Projet_Data/data_brute/tracking GPS - pedagogie emergente.csv", low_memory=False)
+    df_infos = pd.read_csv("C:/Users/Ousmane Kontao/Desktop/Projet_Data/data_brute/informations - pedagogie emergente.csv", sep=';')
     sequence = int(input("donne le numéro de la possession : "))
     t = float(input("Quel temps (en secondes) veux-tu visualiser ? : "))
     G = construire_graphe(t, df, df_infos, sequence)
@@ -56,7 +56,7 @@ def construire_graphe(t, df, df_infos, sequence):
     df_clean = df_clean[df_clean["GPS"] != "Ball"].copy()
     df_clean["Player"] = df_clean["Player"].fillna(0).astype(int)
 
-    df_seq = pd.read_csv("C:/Users/Ousmane Kontao/Desktop/Projet_Data🏀/data_brute/event sequencage - pedagogie emergente.csv", sep=';')
+    df_seq = pd.read_csv("C:/Users/Ousmane Kontao/Desktop/Projet_Data/data_brute/event sequencage - pedagogie emergente.csv", sep=';')
     df_seq = df_seq[df_seq["Possession"] == sequence]
 
     att_players = df_infos[df_infos['Team'] == 'Att']['ID'].tolist()

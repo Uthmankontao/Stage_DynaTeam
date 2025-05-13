@@ -9,9 +9,9 @@ from Stage_DynaTeam.scripts.tools.pitch import draw_rugby_field
 
 
 # Chargement des données
-df = pd.read_csv("C:/Users/Ousmane Kontao/Desktop/Projet_Data🏀/data_brute/tracking GPS - pedagogie emergente.csv", low_memory=False)
-df_infos = pd.read_csv("C:/Users/Ousmane Kontao/Desktop/Projet_Data🏀/data_brute/informations - pedagogie emergente.csv", sep=';')
-df_seq = pd.read_csv("C:/Users/Ousmane Kontao/Desktop/Projet_Data🏀/data_brute/event sequencage - pedagogie emergente.csv", sep=';')
+df = pd.read_csv("C:/Users/Ousmane Kontao/Desktop/Projet_Data/data_brute/tracking GPS - pedagogie emergente.csv", low_memory=False)
+df_infos = pd.read_csv("C:/Users/Ousmane Kontao/Desktop/Projet_Data/data_brute/informations - pedagogie emergente.csv", sep=';')
+df_seq = pd.read_csv("C:/Users/Ousmane Kontao/Desktop/Projet_Data/data_brute/event sequencage - pedagogie emergente.csv", sep=';')
 
 
 # Identifier les joueurs

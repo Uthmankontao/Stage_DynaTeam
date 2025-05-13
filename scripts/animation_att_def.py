@@ -207,7 +207,7 @@ def update(t):
 ani = FuncAnimation(fig, update, frames=times, init_func=init, interval=40, blit=True)
 plt.tight_layout()
 plt.show()
-#ani.save("animation_rugby.gif", writer="pillow", fps=15)
+ani.save("animation_rugby.gif", writer="pillow", fps=15)
 #print("Animation avec filtre de pression cohérent enregistrée.")
 
 

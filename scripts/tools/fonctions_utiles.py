@@ -6,10 +6,10 @@ def dynamic_threshold(x):
     return max(8, 18 - 0.2 * x)
 
 def is_backward_pass(cpos, pos, cote):
-    return pos[0] > cpos[0] if cote == "DROITE" else pos[0] < cpos[0]
+    return pos[0] < cpos[0] if cote == "DROITE" else pos[0] > cpos[0]
 
 def is_pressure_valid(dpos, apos, cote):
-    return dpos[0] < apos[0] if cote == "DROITE" else dpos[0] > apos[0]
+    return dpos[0] > apos[0] if cote == "DROITE" else dpos[0] < apos[0]
 
 def get_cote_for_possession(possession_id, df_seq):
     row = df_seq[df_seq["Possession"] == possession_id]
@@ -17,7 +17,27 @@ def get_cote_for_possession(possession_id, df_seq):
         return row["Cote"].iloc[0]
     return "DROITE"
 
-
+def cores_GPS_player(df_players, df_infos):
+    # Create a dictionary mapping GPS values to PLAYER values
+    dict_gps_to_player = {}
+    for _, row in df_infos.iterrows():
+        dict_gps_to_player[row['GPS']] = row['PLAYER']
+    
+    # Create a new column 'Player' in df_players based on the GPS values
+    player_list = []
+    for _, row in df_players.iterrows():
+        gps_value = row['GPS']
+        # Check if the GPS value is NaN
+        if pd.isna(gps_value):
+            player_list.append("0")  # Valeur par défaut
+        else:
+            # Try to get the player, use a default if not found
+            player_list.append(dict_gps_to_player.get(gps_value, "0"))
+    
+    # Assigner la liste à la colonne Player
+    df_players['Player'] = player_list
+    
+    return df_players
 
 
 # Fonction pour vérifier si une ligne coupe une ellipse
@@ -65,7 +85,7 @@ def line_intersects_ellipse(line_start, line_end, ellipse_center, width, height,
     line_length = np.linalg.norm(d)
     
     # Direction normalisée
-    d_normalized = d / line_length if line_length > 0 else np.array([0, 0])
+    d_normalized = d / line_length if line_length < 0 else np.array([0, 0])
     
     # Coefficients de l'équation quadratique (maintenant pour un cercle unité)
     a = np.dot(d_normalized, d_normalized)

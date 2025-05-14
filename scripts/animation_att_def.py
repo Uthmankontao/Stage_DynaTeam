@@ -3,9 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 from matplotlib.lines import Line2D
-from build_graph import construire_graphe
-import networkx as nx
-from Stage_DynaTeam.scripts.tools.pitch import draw_rugby_field
+from tools.pitch import draw_rugby_field
 
 
 # Chargement des données
@@ -19,6 +17,7 @@ att_players = df_infos[df_infos['Team'] == 'Att']['ID'].tolist()
 def_players = df_infos[df_infos['Team'] == 'Def']['ID'].tolist()
 players = att_players + def_players
 player_teams = {p: 'Att' if p in att_players else 'Def' for p in players}
+
 
 # Filtrer les données pour une seule possession (ex. : 1)
 df_possession_1 = df[(df['Possession'] == 1) & (df['GPS'] != 'Ball')].copy()

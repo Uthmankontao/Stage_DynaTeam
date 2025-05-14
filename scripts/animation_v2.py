@@ -10,22 +10,33 @@ from tools.fonctions_utiles import *
 
 
 # Chargement des données
-df = pd.read_csv("C:/Users/Rémi/Documents/stage/stage_Dynateam/Stage_DynaTeam/data/donnees_brute/Etude 4.3. rugby/data/tracking GPS - pedagogie emergente.csv", low_memory=False)
-df_seq = pd.read_csv("C:/Users/Rémi/Documents/stage/stage_Dynateam/Stage_DynaTeam/data/donnees_brute/Etude 4.3. rugby/data/event sequencage - pedagogie emergente.csv", sep=';')
-df_infos = pd.read_csv("C:/Users/Rémi/Documents/stage/stage_Dynateam/Stage_DynaTeam/data/donnees_brute/Etude 4.3. rugby/data/informations - pedagogie emergente.csv", sep=';')
+df_players = pd.read_csv("C:/Users/Rémi/Documents/stage/stage_Dynateam/Stage_DynaTeam/data/data_v2/AGEN_PRESCRIPTIF_SORTED.csv")
+df_ball = pd.read_csv("C:/Users/Rémi/Documents/stage/stage_Dynateam/Stage_DynaTeam/data/data_v2/AGEN_BALL_PRESCRIPTIF_SORTED.csv")
+df_seq = pd.read_csv("C:/Users/Rémi/Documents/stage/stage_Dynateam/Stage_DynaTeam/data/data_v2/SEQUENCES_v2.csv", sep=';')
+df_infos = pd.read_csv("C:/Users/Rémi/Documents/stage/stage_Dynateam/Stage_DynaTeam/data/data_v2/INFOS_v2.csv", sep=';')
 
+# Sélectionner les données
+df_seq = df_seq[(df_seq['Expe'] == 'agen')]
+df_infos = df_infos[(df_infos['EXPE'] == 'agen') & (df_infos['PEDA'] == 'prescriptif')]
 
-# Identifier les joueurs
-att_players = df_infos[df_infos['Team'] == 'Att']['ID'].tolist()
-def_players = df_infos[df_infos['Team'] == 'Def']['ID'].tolist()
-players = att_players + def_players
-player_teams = {p: 'Att' if p in att_players else 'Def' for p in players}
 
 # Filtrer les données pour une seule possession
-df_possession_1 = df[(df['Possession'] == 1) & (df['GPS'] != 'Ball')].copy()
-df_possession_1_ball = df[(df['Possession'] == 1) & (df['GPS'] == 'Ball')].copy()
+df_possession_1 = df_players[(df_players['Possession'] == 1)].copy()
+df_possession_1_ball = df_ball[(df_ball['Possession'] == 1)].copy()
 df_possession_1['Carrier'] = False
+df_possession_1['Player'] = 0
+df_possession_1_ball['Player'] = 0
 df_seq_1 = df_seq[df_seq['Possession'] == 1]
+
+# Correspondance GPS players
+df_possession_1 = cores_GPS_player(df_possession_1, df_infos)
+df_possession_1_ball = cores_GPS_player(df_possession_1_ball, df_infos)
+
+# Identifier les joueurs
+att_players = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]  # Supposons que ces joueurs sont les attaquants
+def_players = [11.0, 12.0, 13.0, 14.0, 15.0, 16.0]  # Supposons que ces joueurs sont les défenseurs
+players = att_players + def_players
+player_teams = {p: 'Att' if p in att_players else 'Def' for p in players}
 
 # Calculer les gradients pour tous les joueurs
 df_possession_1 = calculate_gradient(df_possession_1)
@@ -39,7 +50,7 @@ for _, row in df_possession_1_ball.iterrows():
 times = df_possession_1['Time'].unique()
 
 # Graphique
-fig, ax = plt.subplojts(figsize=(12, 8))
+fig, ax = plt.subplots(figsize=(12, 8))
 draw_rugby_field(ax)
 ax.set_xlim(-15, 50)
 ax.set_ylim(-40, 10)

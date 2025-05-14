@@ -7,10 +7,9 @@ from tools.pitch import draw_rugby_field
 
 
 # Chargement des données
-df = pd.read_csv("C:/Users/Ousmane Kontao/Desktop/Projet_Data/data_brute/tracking GPS - pedagogie emergente.csv", low_memory=False)
-df_infos = pd.read_csv("C:/Users/Ousmane Kontao/Desktop/Projet_Data/data_brute/informations - pedagogie emergente.csv", sep=';')
-df_seq = pd.read_csv("C:/Users/Ousmane Kontao/Desktop/Projet_Data/data_brute/event sequencage - pedagogie emergente.csv", sep=';')
-
+df = pd.read_csv("C:/Users/Rémi/Documents/stage/stage_Dynateam/Stage_DynaTeam/data/donnees_brute/Etude 4.3. rugby/data/tracking GPS - pedagogie emergente.csv", low_memory=False)
+df_seq = pd.read_csv("C:/Users/Rémi/Documents/stage/stage_Dynateam/Stage_DynaTeam/data/donnees_brute/Etude 4.3. rugby/data/event sequencage - pedagogie emergente.csv", sep=';')
+df_infos = pd.read_csv("C:/Users/Rémi/Documents/stage/stage_Dynateam/Stage_DynaTeam/data/donnees_brute/Etude 4.3. rugby/data/informations - pedagogie emergente.csv", sep=';')
 
 # Identifier les joueurs
 att_players = df_infos[df_infos['Team'] == 'Att']['ID'].tolist()
@@ -208,7 +207,7 @@ ani = FuncAnimation(fig, update, frames=times, init_func=init, interval=40, blit
 
 plt.tight_layout()
 plt.show()
-#ani.save("animation_rugby.gif", writer="pillow", fps=15)
+ani.save("animation_rugby.gif", writer="pillow", fps=15)
 #print("Animation avec filtre de pression cohérent enregistrée.")
 
 

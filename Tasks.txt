@@ -16,3 +16,19 @@ logique de: { animation, graphes, graphes_dataset}
 
 
 prendre en compte si la passe a été faite avant contact ou apres contact et si elle a été faite avec le pied ou la main
+
+
+
+##########################################################################################################################
+
+Les données de basket contiennent deux sous-dossiers, le premier "LPS" contient 11 fichiers csv non ordonnés nommés comme suit:
+3_4_5_7_10_15_16_21_22_23_29_(fusion.csv)*
+
+Dans chaque fichier nous avons les colonnes timestamp, lat_brute, long_brute, latitude_fusion, longitude_fusion, hdop, vitesse_fusion, battery
+
+
+Pour ce qui est des données de tracking c'est là qu'il y'a le grand bazard, on a deux équipes enregistrées sur des sequences de possessions de 16 possessions
+par vague et chaque équipe fait un nombre indeterminé de vague (au maximum 3) 
+
+les videos sont accompagnées de données sauf que les données qui sont dans les fichiers txt n'ont pas de label indiqué.
+

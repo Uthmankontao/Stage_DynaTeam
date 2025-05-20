@@ -19,7 +19,7 @@ df_infos = pd.read_csv("C:/Users/Rémi/Documents/stage/stage_Dynateam/Stage_Dyna
 df_seq = df_seq[(df_seq['Expe'] == 'agen')]
 df_infos = df_infos[(df_infos['EXPE'] == 'agen') & (df_infos['PEDA'] == 'prescriptif')]
 
-
+ 
 # Filtrer les données pour une seule possession
 df_possession_1 = df_players[(df_players['Possession'] == 1)].copy()
 df_possession_1_ball = df_ball[(df_ball['Possession'] == 1)].copy()

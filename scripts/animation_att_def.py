@@ -20,6 +20,7 @@ player_teams = {p: 'Att' if p in att_players else 'Def' for p in players}
 
 # Filtrer les données pour une seule possession (ex. : 1)
 df_possession_1 = df[(df['Possession'] == 1) & (df['GPS'] != 'Ball')].copy()
+
 df_possession_1_ball = df[(df['Possession'] == 1) & (df['GPS'] == 'Ball')].copy()
 df_possession_1['Carrier'] = False
 df_seq_1 = df_seq[df_seq['Possession'] == 1]

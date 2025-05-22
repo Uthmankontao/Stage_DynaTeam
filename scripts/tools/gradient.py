@@ -3,7 +3,7 @@ import numpy as np
 # Fonction pour calculer le gradient (vitesse et direction)
 def calculate_gradient(df):
     # Trier par joueur et temps pour s'assurer du bon calcul des différences
-    df = df.sort_values(['Player', 'Time'])
+    #df = df.sort_values(['Player', 'Time'])
     
     # Grouper par joueur pour éviter les calculs entre différents joueurs
     result = pd.DataFrame()

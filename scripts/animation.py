@@ -10,9 +10,9 @@ from tools.fonctions_utiles import *
 
 
 # Chargement des données
-df = pd.read_csv("C:/Users/Rémi/Documents/stage/stage_Dynateam/Stage_DynaTeam/data/donnees_brute/Etude 4.3. rugby/data/tracking GPS - pedagogie emergente.csv", low_memory=False)
-df_seq = pd.read_csv("C:/Users/Rémi/Documents/stage/stage_Dynateam/Stage_DynaTeam/data/donnees_brute/Etude 4.3. rugby/data/event sequencage - pedagogie emergente.csv", sep=';')
-df_infos = pd.read_csv("C:/Users/Rémi/Documents/stage/stage_Dynateam/Stage_DynaTeam/data/donnees_brute/Etude 4.3. rugby/data/informations - pedagogie emergente.csv", sep=';')
+df = pd.read_csv("C:/Users/Ousmane Kontao/Desktop/Projet_Data/DATABASE/data_brute/tracking GPS - pedagogie emergente.csv", low_memory=False)
+df_seq = pd.read_csv("C:/Users/Ousmane Kontao/Desktop/Projet_Data/DATABASE/data_brute/event sequencage - pedagogie emergente.csv", sep=';')
+df_infos = pd.read_csv("C:/Users/Ousmane Kontao/Desktop/Projet_Data/DATABASE/data_brute/informations - pedagogie emergente.csv", sep=';')
 
 
 # Identifier les joueurs
@@ -39,7 +39,7 @@ for _, row in df_possession_1_ball.iterrows():
 times = df_possession_1['Time'].unique()
 
 # Graphique
-fig, ax = plt.subplojts(figsize=(12, 8))
+fig, ax = plt.subplots(figsize=(12, 8))
 draw_rugby_field(ax)
 ax.set_xlim(-15, 50)
 ax.set_ylim(-40, 10)

@@ -32,3 +32,26 @@ par vague et chaque équipe fait un nombre indeterminé de vague (au maximum 3)
 
 les videos sont accompagnées de données sauf que les données qui sont dans les fichiers txt n'ont pas de label indiqué.
 
+
+Les vagues ?: C'est comme un systeme imposé 
+
+hdop = indicateur de la qualité de la conf des satellites; 
+vitesse_fusion = ????
+battery =???
+
+
+le coin gauche bas --> (0,0) pour le tracking videos (referentiel)
+
+encoder la distance a la balle a la place du boolean
+
+predire la distance 
+
+
+########
+Decider le protocole
+
+
+Est ce qu'il y'a moyen de savoir pourquoi il y'a parfois 4, 5 joueurs
+
+
+Es

@@ -6,10 +6,10 @@ def dynamic_threshold(x):
     return max(8, 18 - 0.2 * x)
 
 def is_backward_pass(cpos, pos, cote):
-    return pos[0] < cpos[0] if cote == "DROITE" else pos[0] > cpos[0]
+    return pos[0] > cpos[0] if cote == "DROITE" else pos[0] < cpos[0]
 
 def is_pressure_valid(dpos, apos, cote):
-    return dpos[0] > apos[0] if cote == "DROITE" else dpos[0] < apos[0]
+    return dpos[0] < apos[0] if cote == "DROITE" else dpos[0] > apos[0]
 
 def get_cote_for_possession(possession_id, df_seq):
     row = df_seq[df_seq["Possession"] == possession_id]

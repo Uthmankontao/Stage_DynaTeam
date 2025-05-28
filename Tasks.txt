@@ -40,7 +40,7 @@ vitesse_fusion = ????
 battery =???
 
 
-le coin gauche bas --> (0,0) pour le tracking videos (referentiel)
+le coin gauche bas --> (0,0) pour le     videos (referentiel)
 
 encoder la distance a la balle a la place du boolean
 
@@ -54,4 +54,71 @@ Decider le protocole
 Est ce qu'il y'a moyen de savoir pourquoi il y'a parfois 4, 5 joueurs
 
 
-Es
+Es          
+
+
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+import numpy as np
+
+def gliding_window_match_normalized(fusion_df, tracking_df, step=1):
+    best_result = {"best_player": None, "best_start_time": None, "best_distance": float("inf")}
+
+    for pid in tracking_df["player_id"].unique():
+        joueur_df = tracking_df[tracking_df["player_id"] == pid].sort_values("time")
+        if len(joueur_df) < 10:
+            continue
+
+        t_min, t_max = joueur_df["time"].min(), joueur_df["time"].max()
+        traj_duration = t_max - t_min
+        max_start = fusion_df["relative_time"].max() - traj_duration
+
+        for start_time in np.arange(0, max_start, step):
+            end_time = start_time + traj_duration
+            lps_window = fusion_df[(fusion_df["relative_time"] >= start_time) &
+                                   (fusion_df["relative_time"] <= end_time)]
+
+            if len(lps_window) < 10:
+                continue
+
+            try:
+                interp_x = np.interp(lps_window["relative_time"] - start_time,
+                                     joueur_df["time"] - t_min, joueur_df["x_norm"])
+                interp_y = np.interp(lps_window["relative_time"] - start_time,
+                                     joueur_df["time"] - t_min, joueur_df["y_norm"])
+            except Exception:
+                continue
+
+            # Normalisation de la fenêtre LPS
+            lps_x = lps_window["x"].values
+            lps_y = lps_window["y"].values
+            if np.std(lps_x) == 0 or np.std(lps_y) == 0:
+                continue
+
+            lps_x_norm = (lps_x - lps_x.mean()) / lps_x.std()
+            lps_y_norm = (lps_y - lps_y.mean()) / lps_y.std()
+
+            # Calcul de la RMSE
+            diff_x = interp_x - lps_x_norm
+            diff_y = interp_y - lps_y_norm
+            rmse = np.sqrt(np.mean(diff_x**2 + diff_y**2))
+
+            if rmse < best_result["best_distance"]:
+                best_result = {
+                    "best_player": pid,
+                    "best_start_time": start_time,
+                    "best_distance": rmse
+                }
+
+    return best_result
+# Exemple d'utilisation de la fonction gliding_window_match_normalized
+resultats = gliding_window_match_normalized(fusion_df=lps_3, tracking_df=tracking_df)
+print(resultats)
+
+
+
+
+### 
+
+Classifieur --> qui sera le prochain porteur de la balle 
+
+# faire un reéchentillonnage 

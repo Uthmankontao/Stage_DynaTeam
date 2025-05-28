@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 
 
+
 def dynamic_threshold(x):
     return max(8, 18 - 0.2 * x)
 

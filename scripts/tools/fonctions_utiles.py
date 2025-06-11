@@ -1,8 +1,102 @@
 import pandas as pd
 import numpy as np
+from pyproj import Transformer
+import os
+from glob import glob
+def lps_sample(df):
+    df = df.copy()
+    df = df[::2]# c'est tout ce qu'il fallait mettre pour échantillonner tous les 2 frames
+    return df
+
+def nettoyage_lps(df):
+    columns_to_drop = ["lat_brute", "long_brute", "hdop", "vitesse_fusion", "battery"]
+    df = df.drop(columns=columns_to_drop, errors='ignore')
+    df = lps_sample(df)
+    transformer = Transformer.from_crs("epsg:4326", "epsg:2154", always_xy=True)
+    df['x'], df['y'] = transformer.transform(df['longitude_fusion'].values, df['latitude_fusion'].values)
+    # normalisation centrée réduite
+    df['x_norm'] = (df['x'] - df['x'].mean()) / df['x'].std()
+    df['y_norm'] = (df['y'] - df['y'].mean()) / df['y'].std()
+    df['datetime'] = pd.to_datetime(df['timestamp'], unit='ms')
+    start_time = df['datetime'].iloc[0]
+    df['relative_time'] = (df['datetime'] - start_time).dt.total_seconds()
+    df = df.dropna(subset=["latitude_fusion", "longitude_fusion"])
+    df = df.reset_index(drop=True)
+    return df
+def tracking_sample(df):
+    """
+    Échantillonne le DataFrame en gardant une frame sur 5
+    """
+    df = df.copy()
+    unique_frames = sorted(df['frame'].unique())
+    selected_frames = unique_frames[::5]
+    df = df[df['frame'].isin(selected_frames)]
+    return df
+
+def nettoyage_tracking(df):
+    df = df.dropna(subset=["x", "y"])
+    df = df.reset_index(drop=True)
+    df = tracking_sample(df)
+    df["time"] = df["frame"] / 25
+    df["x"] = df["x"].astype(float)
+    df["y"] = df["y"].astype(float)
+    df["player_id"] = df["player_id"].astype(int)
+    df["frame"] = df["frame"].astype(int)
+
+    df["x_norm"] = df.groupby("player_id")["x"].transform(lambda x: (x - x.mean()) / x.std() if x.std() > 0 else 0)
+    df["y_norm"] = df.groupby("player_id")["y"].transform(lambda y: (y - y.mean()) / y.std() if y.std() > 0 else 0)
+    return df
 
 
+def load_fusion_files(folder_path):
+    fusion_files = glob(os.path.join(folder_path, "*_fusion.csv"))
+    dataframes = []
+    for file in fusion_files:
+        df = pd.read_csv(file, sep=';')
+        dataframes.append(df)
+    return dataframes
 
+def get_dictionnaire(liste_lps):
+    for i in range(len(liste_lps)):
+        liste_lps[i] = nettoyage_lps(liste_lps[i])
+    lps_dict = {i: df for i, df in enumerate(liste_lps)}
+    return lps_dict
+
+def tenseur_tracking(tracking_df):
+
+    tracking_times = tracking_df["time"].sort_index().unique()
+    n_frames = len(tracking_times) # c'est ce qui va nous permettre de connaitre la longueur de la trajectoire
+    # pour chaque joueur dans les gps
+    delta_t = tracking_times[-1] - tracking_times[0]
+    print(f"Cette vidéo dure {(delta_t):.2f} secondes")
+    
+    tracking_par_joueur = tracking_df.groupby("player_id")
+    player_ids = tracking_df["player_id"].unique()
+    for i in range(len(player_ids)):
+        print(f"Joueur {i}: {len(tracking_par_joueur.get_group(i))} frames")
+
+    player_ids_valides = []
+    liste_des_trajectoires = []
+
+    for pid in player_ids:
+        trajectoire = tracking_par_joueur.get_group(pid).sort_values("time")
+        trajectoire = trajectoire[["time", "x_norm", "y_norm"]].drop_duplicates("time")
+
+        if len(trajectoire) < 0.75 * n_frames:
+            continue
+        trajectoire_interp = pd.DataFrame({"time" : tracking_times})
+        trajectoire_interp = trajectoire_interp.merge(trajectoire, on="time", how="left")
+
+        trajectoire_interp["x_norm"] = trajectoire_interp["x_norm"].interpolate(method="linear", limit_direction="both")
+        trajectoire_interp["y_norm"] = trajectoire_interp["y_norm"].interpolate(method="linear", limit_direction="both")
+
+        player_ids_valides.append(pid)
+        liste_des_trajectoires.append(trajectoire_interp[["x_norm", "y_norm"]].values)
+
+    tracking = np.stack(liste_des_trajectoires, axis=0)
+    print(f"Nous avons desormais un tenseur de tracking de taille {tracking.shape}")
+
+    return tracking, player_ids_valides, delta_t, n_frames
 def dynamic_threshold(x):
     return max(8, 18 - 0.2 * x)
 

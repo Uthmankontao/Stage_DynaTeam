@@ -122,3 +122,160 @@ print(resultats)
 Classifieur --> qui sera le prochain porteur de la balle 
 
 # faire un reéchentillonnage 
+
+
+import pandas as pd
+import numpy as np
+from scipy.optimize import linear_sum_assignment
+from tools.fonctions_utiles import nettoyage_tracking, nettoyage_lps, load_fusion_files, get_dictionnaire, tenseur_tracking
+
+
+def main():
+    tracking_1_1_2_1 = "C:/Users/Ousmane Kontao/Desktop/Projet_Data/DATABASE/basket/TRACKING/Equipe1_Vague1_Poss2_video_1.txt" # pour chaque possession
+    # donner le chemin absolu du fichier
+    tracking_df = pd.read_csv(tracking_1_1_2_1, names=['frame', 'player_id', 'x', 'y'], sep=",")
+    tracking_df = nettoyage_tracking(tracking_df)
+    liste_lps = load_fusion_files("C:/Users/Ousmane Kontao/Desktop/Projet_Data/DATABASE/basket/LPS")
+
+    for i in range(len(liste_lps)):
+        liste_lps[i] = nettoyage_lps(liste_lps[i])
+    lps_dict = {i: df for i, df in enumerate(liste_lps)}
+
+    tracking_tensor, player_ids_valides, delta_t, n_frames = tenseur_tracking(tracking_df)
+    N = len(liste_lps)
+    P = len(player_ids_valides)
+
+    results = {}  # (i, j) -> {'mean_dist': float, 'start_time': float}
+    for i, (nom, lps_df) in enumerate(lps_dict.items()):
+        lps_times = lps_df['relative_time'].sort_values().unique()
+
+        for t0 in lps_times:
+            t_end = t0 + delta_t
+            lps_window = lps_df[(lps_df['relative_time'] >= t0) & (lps_df['relative_time'] <= t_end)]
+
+            if len(lps_window) != n_frames:
+                continue  # fenêtre incomplète
+
+            lps_traj = lps_window[['x_norm', 'y_norm']].values  # (T, 2)
+
+            # Construire la cost matrix (P joueurs vs 1 LPS)
+            dist_matrix = np.zeros((P, 1))  # chaque joueur vs cette LPS
+
+            for j in range(P):
+                dists = np.linalg.norm(tracking_tensor[j] - lps_traj, axis=1)
+                dist_matrix[j, 0] = dists.mean()
+
+            # LSAP : un seul joueur est affecté à cette LPS (minimisation)
+            row_ind, col_ind = linear_sum_assignment(dist_matrix)
+
+            # Pour chaque appariement (ici un seul par fenêtre)
+            for j in row_ind:
+                key = (i, j)
+                new_cost = dist_matrix[j, 0]
+                if key not in results or new_cost < results[key]['mean_dist']:
+                    results[key] = {'mean_dist': new_cost, 'start_time': t0}
+    print(results)
+
+
+def lsap_gps_lps(tracking_df, lps_dict, tracking_tensor):
+
+    results = {} # pour chaque couple (i, j) on aura -->  {'mean_dist' : distance_moyenne, 'start_time' : temps} 
+    
+    tracking_times = tracking_df["time"].sort_index().unique()
+    n_frames = len(tracking_times) 
+    delta_t = tracking_times[-1] - tracking_times[0]
+    print(f"Cette vidéo dure {(delta_t):.2f} secondes")
+
+    results = {}  # (i, j) -> {'mean_dist': float, 'start_time': float}
+
+    for i, (name, lps_df) in enumerate(lps_dict.items()):
+        lps_times = lps_df['relative_time'].sort_values().unique()
+
+        for t0 in lps_times:
+            t_end = t0 + delta_t
+            lps_window = lps_df[(lps_df['relative_time'] >= t0) & (lps_df['relative_time'] <= t_end)]
+
+            if len(lps_window) != n_frames:
+                continue  # fenêtre incomplète
+
+            lps_traj = lps_window[['x_norm', 'y_norm']].values  # (T, 2)
+
+            # Construire la cost matrix (P joueurs vs 1 LPS)
+            dist_matrix = np.zeros((P, 1))  # chaque joueur vs cette LPS
+
+            for j in range(P):
+                dists = np.linalg.norm(tracking_tensor[j] - lps_traj, axis=1)
+                dist_matrix[j, 0] = dists.mean()
+
+            # LSAP : un seul joueur est affecté à cette LPS (minimisation)
+            row_ind, col_ind = linear_sum_assignment(dist_matrix)
+
+            # Pour chaque appariement (ici un seul par fenêtre)
+            for j in row_ind:
+                key = (i, j)
+                new_cost = dist_matrix[j, 0]
+                if key not in results or new_cost < results[key]['mean_dist']:
+                    results[key] = {'mean_dist': new_cost, 'start_time': t0}
+
+    """for i, (name, lps_df) in enumerate(lps_dict.items()):
+        lps_times = lps_df["relative_time"].sort_values().unique()
+
+        for t0 in lps_times:
+            t_end =  t0 + delta_t
+            fenetre_lps = lps_df[(lps_df["relative_time"] >= t0) & (lps_df["relative_time"]<= t_end)]
+
+            if len(fenetre_lps) != n_frames:
+                continue
+            trajectoire_lps = fenetre_lps[["x_norm", "y_norm"]].values()
+
+            matrice_distances = np.zeros((8, 1))
+
+            for j in range(8):
+                distances = np.linalg.norm(tracking_tenseur[j] - trajectoire_lps, axis=1)
+                matrice_distances[j, 0] = distances.mean()
+
+            # lsap pour affecter un seul joueur au lps
+            row_ind, col_ind = linear_sum_assignment(matrice_distances)
+
+            for j in row_ind:
+                key = (i, j)
+                new_cost = matrice_distances[j, 0]
+                if key not in results or new_cost < results[key]["mean_dist"]:
+                    results[key] = {"mean_dist" : new_cost, "start_time" : t0}
+    return results"""
+    return results
+
+
+def resultat_lsap(results, lps_dict, N, P, player_ids):
+    matrice_des_couts = np.full((N, P), np.inf)
+    matrice_des_t0 = np.full((N, P), np.nan)
+
+    for (i,j), values in results.items():
+        matrice_des_couts[i, j] = values["mean_dist"]
+        matrice_des_t0[i,j] = values["start_time"]
+
+    row_ind, col_ind = linear_sum_assignment(matrice_des_couts)
+    assignation = []
+
+    for i,j in zip(row_ind, col_ind):
+        cost = matrice_des_couts[i, j]
+        t0 = matrice_des_t0[i, j]
+        lps_name = list(lps_dict.keys())[i]
+        player_id = player_ids[j]
+        assignation.append({
+            'lps_index': i,
+            'lps_name': lps_name,
+            'player_index': j,
+            'player_id': player_id,
+            'cost': cost,
+            'start_time': t0
+        })
+    for a in assignation:
+        print(f"LPS '{a['lps_name']}' → Joueur {a['player_id']} | coût = {a['cost']:.3f} | t0 = {a['start_time']:.2f}")
+    return matrice_des_couts, matrice_des_t0
+
+
+main()
+
+
+

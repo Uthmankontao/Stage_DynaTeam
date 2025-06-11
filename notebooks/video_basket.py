@@ -155,16 +155,16 @@ def create_tracking_animation(df_tracking, df_lps, t0, player_id=None, output_fi
     tracking_trails = {}  # Pour la trajectoire du joueur spécifique
     
     # Trajectoire LPS avec style distinctif (cyan/turquoise)
-    lps_line, = ax.plot([], [], color='#00FFFF', alpha=0.9, linewidth=5, 
+    lps_line, = ax.plot([], [], color="#FF0000", alpha=0.9, linewidth=5, 
                     label=f'LPS Joueur {player_id}', linestyle='-',
                     zorder=3)
-    lps_point = ax.scatter([], [], c='#00FFFF', s=350, 
+    lps_point = ax.scatter([], [], c="#FF0000", s=350, 
                         zorder=7, edgecolors='white', linewidth=3, marker='D')
     
     # Trajectoire complète LPS en arrière-plan (fantôme)
     if not lps_filtered.empty:
         ax.plot(lps_filtered[coord_x], lps_filtered[coord_y], 
-            color='#00FFFF', alpha=0.15, linewidth=2, linestyle=':', 
+            color="#FF0000", alpha=0.15, linewidth=2, linestyle=':', 
             zorder=1)
     
     # Initialiser la trajectoire de tracking pour le joueur spécifié seulement

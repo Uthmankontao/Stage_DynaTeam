@@ -10,31 +10,37 @@ from tools.fonctions_utiles import *
 
 
 # Chargement des données
-df_players = pd.read_csv("C:/Users/Rémi/Documents/stage/stage_Dynateam/Stage_DynaTeam/data/data_v2/AGEN_PRESCRIPTIF_SORTED.csv")
-df_ball = pd.read_csv("C:/Users/Rémi/Documents/stage/stage_Dynateam/Stage_DynaTeam/data/data_v2/AGEN_BALL_PRESCRIPTIF_SORTED.csv")
-df_seq = pd.read_csv("C:/Users/Rémi/Documents/stage/stage_Dynateam/Stage_DynaTeam/data/data_v2/SEQUENCES_v2.csv", sep=';')
-df_infos = pd.read_csv("C:/Users/Rémi/Documents/stage/stage_Dynateam/Stage_DynaTeam/data/data_v2/INFOS_v2.csv", sep=';')
+df_players = pd.read_csv("C:/Users/Rémi/Documents/stage/stage_Dynateam/Stage_DynaTeam/data/data_v2/data/export/AGEN_PRESCRIPTIF.csv")
+df_ball = pd.read_csv("C:/Users/Rémi/Documents/stage/stage_Dynateam/Stage_DynaTeam/data/data_v2/data/export/AGEN_BALL_PRESCRIPTIF.csv")
+df_seq = pd.read_csv("C:/Users/Rémi/Documents/stage/stage_Dynateam/Stage_DynaTeam/data/data_v2/data/sequencage/agen_prescriptif.csv", sep=';')
+df_infos = pd.read_csv("C:/Users/Rémi/Documents/stage/stage_Dynateam/Stage_DynaTeam/data/data_v2/data/info_GPS/agen_prescriptif.csv", sep=';')
 
-# Sélectionner les données
-df_seq = df_seq[(df_seq['Expe'] == 'agen')]
-df_infos = df_infos[(df_infos['EXPE'] == 'agen') & (df_infos['PEDA'] == 'prescriptif')]
-
+# Tri des df players et ball
+df_players_sorted = df_players.sort_values(['Possession', 'GPS', 'Time']).copy()
+df_ball_sorted = df_ball.sort_values(['Possession', 'Time']).copy()
  
 # Filtrer les données pour une seule possession
 df_possession_1 = df_players[(df_players['Possession'] == 1)].copy()
 df_possession_1_ball = df_ball[(df_ball['Possession'] == 1)].copy()
+df_seq_1 = df_seq[df_seq['Possession'] == 1].copy()
+
+# Ajout des colonnes
 df_possession_1['Carrier'] = False
 df_possession_1['Player'] = 0
 df_possession_1_ball['Player'] = 0
-df_seq_1 = df_seq[df_seq['Possession'] == 1]
+df_possession_1_ball['state'] = ''
 
 # Correspondance GPS players
 df_possession_1 = cores_GPS_player(df_possession_1, df_infos)
 df_possession_1_ball = cores_GPS_player(df_possession_1_ball, df_infos)
 
+# Mettre a jour l'état de la balle
+df_possession_1_ball = maj_state(df_possession_1_ball, df_seq_1)
+
 # Identifier les joueurs
-att_players = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]  # Supposons que ces joueurs sont les attaquants
-def_players = [11.0, 12.0, 13.0, 14.0, 15.0, 16.0]  # Supposons que ces joueurs sont les défenseurs
+att_players = df_infos[df_infos['Team'] == 'Att']['player'].tolist()
+def_players = df_infos[df_infos['Team'] == 'Def']['player'].tolist()
+def_players = list(map(lambda x: x + 10, def_players))
 players = att_players + def_players
 player_teams = {p: 'Att' if p in att_players else 'Def' for p in players}
 
@@ -49,13 +55,65 @@ for _, row in df_possession_1_ball.iterrows():
 
 times = df_possession_1['Time'].unique()
 
+# Définition des couleurs pour la balle selon différents critères
+BALL_COLORS = {
+    'portée': 'white',
+    'avc': 'gold',           # avant contacte
+    'apc': 'purple',           # après contacte
+    'pied' : 'cyan'
+}
+
+def determine_ball_color(ball_state):
+    """Détermine la couleur de la balle selon son état"""
+    if ball_state == 'portée':
+        return BALL_COLORS['portée']
+    elif ball_state == 'avc':
+        return BALL_COLORS['avc']
+    elif ball_state == 'apc':
+        return BALL_COLORS['apc']
+    elif ball_state == 'pied':  # Correction : 'pied' au lieu de 'Pied'
+        return BALL_COLORS['pied']
+    else:
+        return BALL_COLORS['portée']
+
+def point_in_ellipse(point, center, width, height, angle):
+    """
+    Vérifie si un point est à l'intérieur d'une ellipse
+    
+    Args:
+        point: Point à tester (x, y)
+        center: Centre de l'ellipse (x, y)
+        width: Largeur de l'ellipse
+        height: Hauteur de l'ellipse
+        angle: Angle de rotation en radians
+    
+    Returns:
+        bool: True si le point est dans l'ellipse
+    """
+    # Translater le point vers l'origine
+    dx = point[0] - center[0]
+    dy = point[1] - center[1]
+    
+    # Appliquer la rotation inverse
+    cos_angle = np.cos(-angle)
+    sin_angle = np.sin(-angle)
+    
+    x_rot = dx * cos_angle - dy * sin_angle
+    y_rot = dx * sin_angle + dy * cos_angle
+    
+    # Tester si le point est dans l'ellipse normalisée
+    a = width / 2
+    b = height / 2
+    
+    return (x_rot / a) ** 2 + (y_rot / b) ** 2 <= 1
+
 # Graphique
 fig, ax = plt.subplots(figsize=(12, 8))
 draw_rugby_field(ax)
 ax.set_xlim(-15, 50)
 ax.set_ylim(-40, 10)
 scatters = {p: ax.scatter([], [], s=100, color=('red' if p in att_players else 'blue')) for p in players}
-ball_scatter = ax.scatter([], [], s=50, color='white', zorder=5)
+ball_scatter = ax.scatter([], [], s=80, color='white', zorder=5, edgecolors='black', linewidth=2)
 text_labels = []
 
 passes_lines, blocked_passes_lines, secondary_passes_lines, pressure_lines, influence_zones = [], [], [], [], []
@@ -128,10 +186,24 @@ def update(t):
             text_labels.append(txt)
         else:
             scatters[p].set_offsets(np.empty((0, 2)))
-
+    
+    ball_color = 'white'  # Couleur par défaut
+    
     if not ball_data.empty:
         bx, by = ball_data[['X', 'Y']].values[0]
+        # Correction : récupérer correctement l'état de la balle
+        ball_state = ball_data['state'].iloc[0]  # Utiliser .iloc[0] pour récupérer la valeur
         ball_scatter.set_offsets([[bx, by]])
+        
+        # Déterminer la couleur de la balle selon la situation
+        ball_color = determine_ball_color(ball_state)
+        ball_scatter.set_color(ball_color)
+    else:
+        # Si pas de données de balle, cacher le scatter
+        ball_scatter.set_offsets(np.empty((0, 2)))
+    
+    # Trouver le porteur de balle
+    carrier = frame_data[frame_data['Carrier']]
     
     # Créer des zones d'influence elliptiques pour les défenseurs
     defender_zones = {}
@@ -209,9 +281,12 @@ def update(t):
                              fontsize=7, ha='center', color='cyan')
                 text_labels.append(txt)
 
+    # Déterminer la couleur de la balle selon la situation
+    ball_color = determine_ball_color(ball_state)
+    ball_scatter.set_color(ball_color)
+
     # Passes depuis porteur et identification des receveurs directs
     direct_receivers = []  # liste pour stocker les receveurs directs potentiels
-    carrier = frame_data[frame_data['Carrier']]
     
     if not carrier.empty:
         cid = carrier['Player'].iloc[0]
@@ -303,6 +378,19 @@ def update(t):
                     txt = ax.text((dpos[0] + apos[0])/2, (dpos[1] + apos[1])/2,
                                   f"{dist:.1f}", fontsize=6, color='white')
                     text_labels.append(txt)
+
+    # Ajouter une légende pour les couleurs de la balle
+    '''color_legend = [
+        f"🟡 Portée (normal): {BALL_COLORS['in_hand']}",
+        f"🔴 Sous pression: {BALL_COLORS['under_pressure']}",
+        f"🟢 Jeu libre: {BALL_COLORS['free_play']}",
+        f"🟠 Zone dangereuse: {BALL_COLORS['danger_zone']}",
+        f"🟢 Opportunité: {BALL_COLORS['scoring_opportunity']}"
+    ]'''
+    legend_text = f"État balle: {ball_state if not ball_data.empty else 'N/A'} - Couleur: {ball_color}"
+    txt = ax.text(0.02, 0.98, legend_text, transform=ax.transAxes, fontsize=10, 
+                  verticalalignment='top', bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
+    text_labels.append(txt)
 
     ax.set_title(f'Temps : {t:.2f}s – Côté : {cote}')
     return (list(scatters.values()) + [ball_scatter] + passes_lines + blocked_passes_lines + 

@@ -1,110 +1,16 @@
 import pandas as pd
 import numpy as np
-from pyproj import Transformer
-import os
-from glob import glob
-def lps_sample(df):
-    df = df.copy()
-    df = df[::2]# c'est tout ce qu'il fallait mettre pour échantillonner tous les 2 frames
-    return df
-
-def nettoyage_lps(df):
-    columns_to_drop = ["lat_brute", "long_brute", "hdop", "vitesse_fusion", "battery"]
-    df = df.drop(columns=columns_to_drop, errors='ignore')
-    df = lps_sample(df)
-    transformer = Transformer.from_crs("epsg:4326", "epsg:2154", always_xy=True)
-    df['x'], df['y'] = transformer.transform(df['longitude_fusion'].values, df['latitude_fusion'].values)
-    # normalisation centrée réduite
-    df['x_norm'] = (df['x'] - df['x'].mean()) / df['x'].std()
-    df['y_norm'] = (df['y'] - df['y'].mean()) / df['y'].std()
-    df['datetime'] = pd.to_datetime(df['timestamp'], unit='ms')
-    start_time = df['datetime'].iloc[0]
-    df['relative_time'] = (df['datetime'] - start_time).dt.total_seconds()
-    df = df.dropna(subset=["latitude_fusion", "longitude_fusion"])
-    df = df.reset_index(drop=True)
-    return df
-def tracking_sample(df):
-    """
-    Échantillonne le DataFrame en gardant une frame sur 5
-    """
-    df = df.copy()
-    unique_frames = sorted(df['frame'].unique())
-    selected_frames = unique_frames[::5]
-    df = df[df['frame'].isin(selected_frames)]
-    return df
-
-def nettoyage_tracking(df):
-    df = df.dropna(subset=["x", "y"])
-    df = df.reset_index(drop=True)
-    df = tracking_sample(df)
-    df["time"] = df["frame"] / 25
-    df["x"] = df["x"].astype(float)
-    df["y"] = df["y"].astype(float)
-    df["player_id"] = df["player_id"].astype(int)
-    df["frame"] = df["frame"].astype(int)
-
-    df["x_norm"] = df.groupby("player_id")["x"].transform(lambda x: (x - x.mean()) / x.std() if x.std() > 0 else 0)
-    df["y_norm"] = df.groupby("player_id")["y"].transform(lambda y: (y - y.mean()) / y.std() if y.std() > 0 else 0)
-    return df
 
 
-def load_fusion_files(folder_path):
-    fusion_files = glob(os.path.join(folder_path, "*_fusion.csv"))
-    dataframes = []
-    for file in fusion_files:
-        df = pd.read_csv(file, sep=';')
-        dataframes.append(df)
-    return dataframes
 
-def get_dictionnaire(liste_lps):
-    for i in range(len(liste_lps)):
-        liste_lps[i] = nettoyage_lps(liste_lps[i])
-    lps_dict = {i: df for i, df in enumerate(liste_lps)}
-    return lps_dict
-
-def tenseur_tracking(tracking_df):
-
-    tracking_times = tracking_df["time"].sort_index().unique()
-    n_frames = len(tracking_times) # c'est ce qui va nous permettre de connaitre la longueur de la trajectoire
-    # pour chaque joueur dans les gps
-    delta_t = tracking_times[-1] - tracking_times[0]
-    print(f"Cette vidéo dure {(delta_t):.2f} secondes")
-    
-    tracking_par_joueur = tracking_df.groupby("player_id")
-    player_ids = tracking_df["player_id"].unique()
-    for i in range(len(player_ids)):
-        print(f"Joueur {i}: {len(tracking_par_joueur.get_group(i))} frames")
-
-    player_ids_valides = []
-    liste_des_trajectoires = []
-
-    for pid in player_ids:
-        trajectoire = tracking_par_joueur.get_group(pid).sort_values("time")
-        trajectoire = trajectoire[["time", "x_norm", "y_norm"]].drop_duplicates("time")
-
-        if len(trajectoire) < 0.75 * n_frames:
-            continue
-        trajectoire_interp = pd.DataFrame({"time" : tracking_times})
-        trajectoire_interp = trajectoire_interp.merge(trajectoire, on="time", how="left")
-
-        trajectoire_interp["x_norm"] = trajectoire_interp["x_norm"].interpolate(method="linear", limit_direction="both")
-        trajectoire_interp["y_norm"] = trajectoire_interp["y_norm"].interpolate(method="linear", limit_direction="both")
-
-        player_ids_valides.append(pid)
-        liste_des_trajectoires.append(trajectoire_interp[["x_norm", "y_norm"]].values)
-
-    tracking = np.stack(liste_des_trajectoires, axis=0)
-    print(f"Nous avons desormais un tenseur de tracking de taille {tracking.shape}")
-
-    return tracking, player_ids_valides, delta_t, n_frames
 def dynamic_threshold(x):
     return max(8, 18 - 0.2 * x)
 
 def is_backward_pass(cpos, pos, cote):
-    return pos[0] > cpos[0] if cote == "DROITE" else pos[0] < cpos[0]
+    return pos[0] < cpos[0] if cote == "DROITE" else pos[0] > cpos[0]
 
 def is_pressure_valid(dpos, apos, cote):
-    return dpos[0] < apos[0] if cote == "DROITE" else dpos[0] > apos[0]
+    return dpos[0] > apos[0] if cote == "DROITE" else dpos[0] < apos[0]
 
 def get_cote_for_possession(possession_id, df_seq):
     row = df_seq[df_seq["Possession"] == possession_id]
@@ -116,7 +22,10 @@ def cores_GPS_player(df_players, df_infos):
     # Create a dictionary mapping GPS values to PLAYER values
     dict_gps_to_player = {}
     for _, row in df_infos.iterrows():
-        dict_gps_to_player[row['GPS']] = row['PLAYER']
+        if row['Team'] == 'Att':
+            dict_gps_to_player[row['GPS']] = row['player']
+        else:
+            dict_gps_to_player[row['GPS']] = row['player'] + 10
     
     # Create a new column 'Player' in df_players based on the GPS values
     player_list = []
@@ -135,7 +44,6 @@ def cores_GPS_player(df_players, df_infos):
     return df_players
 
 
-# Fonction pour vérifier si une ligne coupe une ellipse
 def line_intersects_ellipse(line_start, line_end, ellipse_center, width, height, angle):
     """
     Vérifie si une ligne (passe) coupe une ellipse (zone d'influence)
@@ -152,6 +60,30 @@ def line_intersects_ellipse(line_start, line_end, ellipse_center, width, height,
     line_start = np.array(line_start)
     line_end = np.array(line_end)
     ellipse_center = np.array(ellipse_center)
+    
+    # Vérifier si la ligne a une longueur nulle
+    line_vector = line_end - line_start
+    line_length = np.linalg.norm(line_vector)
+    
+    # Si la ligne a une longueur nulle, vérifier si le point est dans l'ellipse
+    if line_length < 1e-10:  # Tolérance numérique
+        # Transformer le point dans le repère de l'ellipse
+        cos_angle = np.cos(-angle)
+        sin_angle = np.sin(-angle)
+        
+        # Translation pour centrer l'ellipse à l'origine
+        point_translated = line_start - ellipse_center
+        
+        # Rotation pour aligner l'ellipse avec les axes
+        point_rotated = np.array([
+            point_translated[0] * cos_angle - point_translated[1] * sin_angle,
+            point_translated[0] * sin_angle + point_translated[1] * cos_angle
+        ])
+        
+        # Vérifier si le point est dans l'ellipse
+        normalized_x = point_rotated[0] / (width/2)
+        normalized_y = point_rotated[1] / (height/2)
+        return (normalized_x**2 + normalized_y**2) <= 1
     
     # Transformer la ligne dans le repère de l'ellipse (sans rotation)
     cos_angle = np.cos(-angle)
@@ -175,15 +107,19 @@ def line_intersects_ellipse(line_start, line_end, ellipse_center, width, height,
     ls_scaled = np.array([ls_rotated[0] / (width/2), ls_rotated[1] / (height/2)])
     le_scaled = np.array([le_rotated[0] / (width/2), le_rotated[1] / (height/2)])
     
-    # Vecteur de la ligne
+    # Vecteur de la ligne dans l'espace transformé
     d = le_scaled - ls_scaled
-    line_length = np.linalg.norm(d)
+    d_magnitude = np.linalg.norm(d)
     
-    # Direction normalisée
-    d_normalized = d / line_length if line_length < 0 else np.array([0, 0])
+    # Normalisation sécurisée
+    if d_magnitude < 1e-10:  # Tolérance numérique
+        # Si les points sont identiques après transformation, vérifier si le point est dans le cercle unité
+        return np.linalg.norm(ls_scaled) <= 1
     
-    # Coefficients de l'équation quadratique (maintenant pour un cercle unité)
-    a = np.dot(d_normalized, d_normalized)
+    d_normalized = d / d_magnitude
+    
+    # Coefficients de l'équation quadratique pour l'intersection ligne-cercle
+    a = np.dot(d_normalized, d_normalized)  # Devrait être 1 puisque d_normalized est normalisé
     b = 2 * np.dot(ls_scaled, d_normalized)
     c = np.dot(ls_scaled, ls_scaled) - 1
     
@@ -194,12 +130,62 @@ def line_intersects_ellipse(line_start, line_end, ellipse_center, width, height,
         return False
     
     # Calculer les solutions
-    discriminant = np.sqrt(discriminant)
-    t1 = (-b - discriminant) / (2 * a)
-    t2 = (-b + discriminant) / (2 * a)
+    sqrt_discriminant = np.sqrt(discriminant)
+    
+    # Protection contre la division par zéro (même si a devrait être ~1)
+    if abs(a) < 1e-10:
+        return False
+    
+    t1 = (-b - sqrt_discriminant) / (2 * a)
+    t2 = (-b + sqrt_discriminant) / (2 * a)
     
     # Vérifier si l'intersection est sur le segment de ligne
-    if (0 <= t1 <= line_length) or (0 <= t2 <= line_length):
+    # Les valeurs t sont dans l'espace normalisé, donc on compare avec d_magnitude
+    if (0 <= t1 <= d_magnitude) or (0 <= t2 <= d_magnitude):
         return True
     
     return False
+
+def maj_state(df_ball, df_seq):
+    """
+    Version simplifiée qui se concentre sur les événements principaux
+    """
+    import pandas as pd
+    
+    df_ball_updated = df_ball.copy()
+    
+    # Initialiser la colonne state si elle n'existe pas
+    if 'state' not in df_ball_updated.columns:
+        df_ball_updated['state'] = 'portée'
+    
+    positions = sorted(df_seq['Position'].unique())
+    
+    for i in range(len(positions)):
+        # Récupérer la ligne correspondant à cette position
+        row = df_seq[df_seq['Position'] == positions[i]].iloc[0]
+        
+        # Déterminer l'état selon vos critères
+        if pd.notna(row['Passeur']) and (pd.isna(row['Contact']) or row['Contact'] == ''):
+            state = 'avc'
+        elif pd.notna(row['Passeur']) and row['Contact'] == 'contact':
+            state = 'apc'
+        elif pd.notna(row['Resultat']) and row['Resultat'] == 'jeu au pied':
+            state = 'pied'  # Correction : 'pied' en minuscules
+        else:
+            state = 'portée'
+        
+        # Déterminer la plage de positions à mettre à jour
+        if i < len(positions) - 1:
+            # Positions entre la position actuelle et la suivante
+            start_pos = positions[i]
+            end_pos = positions[i + 1]
+            mask = (df_ball_updated['Position'] >= start_pos) & (df_ball_updated['Position'] < end_pos)
+        else:
+            # Dernière position - appliquer jusqu'à la fin
+            start_pos = positions[i]
+            mask = df_ball_updated['Position'] >= start_pos
+        
+        # Appliquer l'état à toutes les positions dans cette plage
+        df_ball_updated.loc[mask, 'state'] = state
+    
+    return df_ball_updated
